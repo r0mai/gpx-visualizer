@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Tour Visualizer</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        
+        .header p {
+            margin: 0.5rem 0 0 0;
+            opacity: 0.8;
+        }
+        
+        .container {
+            display: flex;
+            height: calc(100vh - 120px);
+        }
+        
+        .sidebar {
+            width: 300px;
+            background-color: white;
+            padding: 1rem;
+            overflow-y: auto;
+            border-right: 1px solid #ddd;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .file-input-container {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+        }
+        
+        .file-input-container label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .file-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px dashed #bdc3c7;
+            border-radius: 5px;
+            background-color: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        
+        .file-input:hover {
+            border-color: #3498db;
+        }
+        
+        .tour-list {
+            margin-top: 1rem;
+        }
+        
+        .tour-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid;
+            transition: background-color 0.3s;
+        }
+        
+        .tour-item:hover {
+            background-color: #e9ecef;
+        }
+        
+        .tour-checkbox {
+            margin-right: 0.75rem;
+        }
+        
+        .tour-info {
+            flex: 1;
+        }
+        
+        .tour-name {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+        
+        .tour-stats {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .stats-container {
+            background-color: white;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-top: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stats-container h3 {
+            margin: 0 0 1rem 0;
+            color: #2c3e50;
+        }
+        
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #7f8c8d;
+        }
+        
+        .error {
+            background-color: #e74c3c;
+            color: white;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚴‍♂️ GPS Tour Visualizer</h1>
+        <p>Upload your GPX files to visualize all your bike tours on an interactive map</p>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="file-input-container">
+                <label for="gpx-files">Select GPX Files:</label>
+                <input type="file" id="gpx-files" class="file-input" multiple accept=".gpx" 
+                       title="Select multiple GPX files">
+            </div>
+            
+            <div id="loading" class="loading" style="display: none;">
+                Loading GPX files...
+            </div>
+            
+            <div id="error-container"></div>
+            
+            <div class="tour-list" id="tour-list">
+                <!-- Tour items will be populated here -->
+            </div>
+            
+            <div class="stats-container" id="stats-container" style="display: none;">
+                <h3>📊 Statistics</h3>
+                <div class="stat-item">
+                    <span>Total Tours:</span>
+                    <span id="total-tours">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>Total Distance:</span>
+                    <span id="total-distance">0 km</span>
+                </div>
+                <div class="stat-item">
+                    <span>Active Tours:</span>
+                    <span id="active-tours">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    
+    <script src="gpx-parser.js"></script>
+    <script src="map-visualizer.js"></script>
+</body>
+</html> 
