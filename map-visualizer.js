@@ -6,9 +6,10 @@ class MapVisualizer {
         this.tourLayers = new Map();
         this.parser = new GPXParser();
         this.colors = [
-            '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
-            '#1abc9c', '#e67e22', '#34495e', '#f1c40f', '#95a5a6',
-            '#c0392b', '#2980b9', '#27ae60', '#d35400', '#8e44ad'
+            '#e74c3c', '#c0392b', '#a93226', '#922b21', '#7b241c',
+            '#ff5733', '#ff4757', '#ff3838', '#ff2f2f', '#e55039',
+            '#ff6b6b', '#ee5a52', '#ff4757', '#ff3742', '#ff2e63',
+            '#d63031', '#b33939', '#a55eea', '#fd79a8', '#e84393'
         ];
         this.colorIndex = 0;
         
