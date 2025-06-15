@@ -5,12 +5,7 @@ class MapVisualizer {
         this.tours = [];
         this.tourLayers = new Map();
         this.parser = new GPXParser();
-        this.colors = [
-            '#e74c3c', '#c0392b', '#a93226', '#922b21', '#7b241c',
-            '#ff5733', '#ff4757', '#ff3838', '#ff2f2f', '#e55039',
-            '#ff6b6b', '#ee5a52', '#ff4757', '#ff3742', '#ff2e63',
-            '#d63031', '#b33939', '#a55eea', '#fd79a8', '#e84393'
-        ];
+        this.colors = [ '#e74c3c' ];
         this.colorIndex = 0;
         
         this.initializeMap();
@@ -172,6 +167,9 @@ class MapVisualizer {
                         opacity: 0.8
                     });
                     
+                    // Add hover effects
+                    this.addHoverEffects(polyline, tour);
+                    
                     // Add popup with tour info
                     polyline.bindPopup(this.createTourPopup(tour));
                     layerGroup.addLayer(polyline);
@@ -186,9 +184,11 @@ class MapVisualizer {
                 const polyline = L.polyline(latLngs, {
                     color: color,
                     weight: 3,
-                    opacity: 0.8,
-                    dashArray: '5, 5'
+                    opacity: 0.8
                 });
+                
+                // Add hover effects
+                this.addHoverEffects(polyline, tour);
                 
                 polyline.bindPopup(this.createTourPopup(tour));
                 layerGroup.addLayer(polyline);
@@ -220,6 +220,82 @@ class MapVisualizer {
 
         this.tourLayers.set(tour.filename, layerGroup);
         layerGroup.addTo(this.map);
+    }
+
+    // Add hover effects to polylines
+    addHoverEffects(polyline, tour) {
+        polyline.on('mouseover', (e) => {
+            this.highlightTour(tour.filename);
+            // Highlight the current polyline
+            e.target.setStyle({
+                weight: 5,
+                opacity: 1.0
+            });
+        });
+
+        polyline.on('mouseout', (e) => {
+            this.unhighlightAllTours();
+            // Reset the current polyline
+            e.target.setStyle({
+                weight: 3,
+                opacity: 0.8
+            });
+        });
+    }
+
+    // Highlight a specific tour and fade others
+    highlightTour(activeFilename) {
+        this.tourLayers.forEach((layerGroup, filename) => {
+            const opacity = filename === activeFilename ? 1.0 : 0.3;
+            const weight = filename === activeFilename ? 4 : 2;
+            
+            layerGroup.eachLayer(layer => {
+                if (layer.setStyle && typeof layer.setStyle === 'function') {
+                    layer.setStyle({
+                        opacity: opacity,
+                        weight: weight
+                    });
+                }
+            });
+        });
+
+        // Also highlight the corresponding sidebar item
+        this.highlightSidebarItem(activeFilename, true);
+    }
+
+    // Reset all tours to normal appearance
+    unhighlightAllTours() {
+        this.tourLayers.forEach((layerGroup, filename) => {
+            layerGroup.eachLayer(layer => {
+                if (layer.setStyle && typeof layer.setStyle === 'function') {
+                    layer.setStyle({
+                        opacity: 0.8,
+                        weight: 3
+                    });
+                }
+            });
+        });
+
+        // Remove sidebar highlighting
+        this.highlightSidebarItem(null, false);
+    }
+
+    // Highlight corresponding sidebar item
+    highlightSidebarItem(filename, highlight) {
+        const tourItems = document.querySelectorAll('.tour-item');
+        tourItems.forEach(item => {
+            const checkbox = item.querySelector('.tour-checkbox');
+            if (highlight && checkbox && checkbox.dataset.filename === filename) {
+                item.style.backgroundColor = '#ffebee';
+                item.style.transform = 'scale(1.02)';
+                item.style.transition = 'all 0.2s ease';
+                item.style.boxShadow = '0 2px 8px rgba(231, 76, 60, 0.3)';
+            } else {
+                item.style.backgroundColor = '';
+                item.style.transform = '';
+                item.style.boxShadow = '';
+            }
+        });
     }
 
     // Create popup content for a tour
@@ -280,6 +356,15 @@ class MapVisualizer {
             if (event.target.type !== 'checkbox') {
                 this.zoomToTour(tour.filename);
             }
+        });
+
+        // Add hover listeners for sidebar items
+        tourItem.addEventListener('mouseenter', () => {
+            this.highlightTour(tour.filename);
+        });
+
+        tourItem.addEventListener('mouseleave', () => {
+            this.unhighlightAllTours();
         });
         
         tourList.appendChild(tourItem);
