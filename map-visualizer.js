@@ -89,6 +89,24 @@ class MapVisualizer {
             const failedFiles = results.filter(result => !result.success);
 
             if (successfulTours.length > 0) {
+                // Sort tours by date (newest first)
+                successfulTours.sort((a, b) => {
+                    const dateA = a.tour.time.start;
+                    const dateB = b.tour.time.start;
+                    
+                    // If both have dates, sort by date (newest first)
+                    if (dateA && dateB) {
+                        return new Date(dateB) - new Date(dateA);
+                    }
+                    
+                    // If only one has a date, prioritize the one with date
+                    if (dateA && !dateB) return -1;
+                    if (!dateA && dateB) return 1;
+                    
+                    // If neither has a date, sort alphabetically by filename
+                    return a.filename.localeCompare(b.filename);
+                });
+                
                 successfulTours.forEach(result => {
                     this.addTour(result.tour);
                 });
