@@ -10,6 +10,7 @@ class MapVisualizer {
         
         this.initializeMap();
         this.setupEventListeners();
+        this.setupTourFilter();
     }
 
     // Initialize the Leaflet map
@@ -53,6 +54,81 @@ class MapVisualizer {
                 this.processFiles(files);
             }
         });
+    }
+
+    // Setup tour filter slider
+    setupTourFilter() {
+        const slider = document.getElementById('tour-count-slider');
+        const display = document.getElementById('tour-count-display');
+        
+        slider.addEventListener('input', (event) => {
+            this.updateTourVisibility(parseInt(event.target.value));
+        });
+        
+        // Also handle change event for better compatibility
+        slider.addEventListener('change', (event) => {
+            this.updateTourVisibility(parseInt(event.target.value));
+        });
+    }
+
+    // Update tour visibility based on slider value
+    updateTourVisibility(showCount) {
+        const totalTours = this.tours.length;
+        const display = document.getElementById('tour-count-display');
+        
+        // Update display text
+        display.textContent = `${showCount} of ${totalTours}`;
+        
+        // Since tours are sorted newest first, but we want to show oldest first as slider increases,
+        // we need to show tours from the end of the array (oldest) up to the count
+        this.tours.forEach((tour, index) => {
+            const layer = this.tourLayers.get(tour.filename);
+            const tourItem = document.querySelector(`[data-filename="${tour.filename}"]`);
+            
+            if (layer && tourItem) {
+                // Show tours from index (totalTours - showCount) onwards (oldest first)
+                const shouldShow = index >= (totalTours - showCount);
+                const checkbox = tourItem;
+                
+                if (shouldShow) {
+                    // Show the tour if its checkbox is checked
+                    if (checkbox.checked) {
+                        layer.addTo(this.map);
+                    }
+                    // Make the tour item visible in sidebar
+                    tourItem.closest('.tour-item').style.display = 'block';
+                } else {
+                    // Hide the tour from map
+                    this.map.removeLayer(layer);
+                    // Hide the tour item from sidebar
+                    tourItem.closest('.tour-item').style.display = 'none';
+                }
+            }
+        });
+        
+        this.updateStatistics();
+    }
+
+    // Initialize tour filter when tours are loaded
+    initializeTourFilter() {
+        const filterContainer = document.getElementById('tour-filter-container');
+        const slider = document.getElementById('tour-count-slider');
+        const totalTours = this.tours.length;
+        
+        if (totalTours > 0) {
+            // Show the filter container
+            filterContainer.style.display = 'block';
+            
+            // Set slider range and default to maximum (show all tours)
+            slider.max = totalTours;
+            slider.value = totalTours;
+            
+            // Initialize visibility (show all tours)
+            this.updateTourVisibility(totalTours);
+        } else {
+            // Hide the filter container if no tours
+            filterContainer.style.display = 'none';
+        }
     }
 
     // Handle file upload
@@ -112,6 +188,7 @@ class MapVisualizer {
                 });
                 this.updateUI();
                 this.fitMapToTours();
+                this.initializeTourFilter();
             }
 
             if (failedFiles.length > 0) {
