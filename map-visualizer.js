@@ -2,6 +2,7 @@
 class MapVisualizer {
     constructor() {
         this.map = null;
+        this.currentTileLayer = null;
         this.tours = [];
         this.tourLayers = new Map();
         this.parser = new GPXParser();
@@ -17,11 +18,9 @@ class MapVisualizer {
     initializeMap() {
         this.map = L.map('map').setView([51.505, -0.09], 2);
         
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 18
-        }).addTo(this.map);
+        // Add default tile layer
+        this.currentTileLayer = this.getTileLayer('osm');
+        this.currentTileLayer.addTo(this.map);
 
         // Add scale control
         L.control.scale({
@@ -31,12 +30,53 @@ class MapVisualizer {
         }).addTo(this.map);
     }
 
+    // Create a tile layer by key
+    getTileLayer(styleKey) {
+        switch (styleKey) {
+            case 'opentopo':
+                return L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 17,
+                    attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
+                });
+            case 'esri-satellite':
+                return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19,
+                    attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+                });
+            case 'osm':
+            default:
+                return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap contributors'
+                });
+        }
+    }
+
+    // Switch the current base layer
+    switchBaseLayer(styleKey) {
+        if (!this.map) return;
+        if (this.currentTileLayer) {
+            this.map.removeLayer(this.currentTileLayer);
+        }
+        this.currentTileLayer = this.getTileLayer(styleKey);
+        this.currentTileLayer.addTo(this.map);
+    }
+
     // Setup event listeners
     setupEventListeners() {
         const fileInput = document.getElementById('gpx-files');
         fileInput.addEventListener('change', (event) => {
             this.handleFileUpload(event);
         });
+
+        // Base layer dropdown
+        const tileSelect = document.getElementById('tile-layer-select');
+        if (tileSelect) {
+            tileSelect.addEventListener('change', (event) => {
+                const value = event.target.value;
+                this.switchBaseLayer(value);
+            });
+        }
 
         // Drag and drop functionality
         const mapContainer = document.getElementById('map');
