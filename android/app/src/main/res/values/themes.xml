@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Base theme applied before Compose takes over. Uses a platform theme so
+        we don't need an AppCompat dependency. Compose (Material3) provides the
+        real look; edge-to-edge is enabled in code via enableEdgeToEdge().
+    -->
+    <style name="Theme.GpsVisualizer" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
