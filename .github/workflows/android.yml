@@ -1,0 +1,65 @@
+name: Build Android APK
+
+on:
+  push:
+  workflow_dispatch:
+
+# Needed so the workflow can create releases / tags with GITHUB_TOKEN.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Provides Gradle 8.9 on PATH (matches gradle-wrapper.properties) and
+      # caches ~/.gradle. Running `gradle` directly means we don't need the
+      # binary gradle-wrapper.jar committed to the repo.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Stage APK
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            "${GITHUB_WORKSPACE}/dist/gps-visualizer-${GITHUB_SHA::7}.apk"
+
+      - name: Upload APK as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gps-visualizer-apk
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Build ${{ github.run_number }} (${{ github.ref_name }})"
+          body: |
+            Automated **debug** APK built from commit ${{ github.sha }} on `${{ github.ref_name }}`.
+
+            Install on an Android device (enable "install unknown apps" for your
+            browser / file manager first). This is a debug build signed with the
+            standard Android debug key — not for Play Store distribution.
+          prerelease: true
+          files: dist/*.apk
