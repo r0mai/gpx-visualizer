@@ -10,7 +10,6 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
-import org.maplibre.android.location.LocationComponentOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
@@ -277,13 +276,20 @@ class MapController(private val mapView: MapView) {
 
     private fun applyFollowCamera() {
         val lc = locationComponentOrNull() ?: return
+        // The location component (and thus the GPS radio + its per-frame
+        // rendering) only runs while actively following, to avoid draining the
+        // battery when the user is just browsing the map.
+        lc.isLocationComponentEnabled = following
         if (following) {
+            // GPS render mode orients the puck from the GPS course, so no
+            // magnetometer/compass sensor is used.
             lc.renderMode = RenderMode.GPS
             lc.cameraMode = CameraMode.TRACKING_GPS // follows position + rotates to travel direction
             lc.zoomWhileTracking(FOLLOW_ZOOM)
             lc.tiltWhileTracking(followTilt)
         } else {
             lc.cameraMode = CameraMode.NONE
+            lc.renderMode = RenderMode.NORMAL
         }
     }
 
@@ -317,22 +323,15 @@ class MapController(private val mapView: MapView) {
         val s = style ?: return
         if (!hasLocationPermission || locationActivated) return
 
+        // No pulse animation: it would render every frame forever and never let
+        // the GPU idle. The puck is drawn statically and updates on demand.
         val options = LocationComponentActivationOptions.builder(context, s)
             .useDefaultLocationEngine(true)
-            .locationComponentOptions(
-                LocationComponentOptions.builder(context)
-                    .pulseEnabled(true)
-                    .build(),
-            )
             .build()
 
-        m.locationComponent.apply {
-            activateLocationComponent(options)
-            isLocationComponentEnabled = true
-            cameraMode = CameraMode.NONE
-            renderMode = RenderMode.COMPASS
-        }
+        m.locationComponent.activateLocationComponent(options)
         locationActivated = true
+        // applyFollowCamera enables the component + GPS only when following.
         applyFollowCamera()
     }
 
