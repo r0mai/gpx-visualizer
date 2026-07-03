@@ -42,6 +42,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -73,6 +74,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.r0mai.gpsvisualizer.data.SyncProgress
 import dev.r0mai.gpsvisualizer.gpx.Format
 import dev.r0mai.gpsvisualizer.gpx.Tour
 import dev.r0mai.gpsvisualizer.map.MapController
@@ -105,6 +107,7 @@ fun MapScreen(vm: MapViewModel) {
     val fitEvent by vm.fitEvent.collectAsStateWithLifecycle()
     val isLoading by vm.isLoading.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
+    val syncProgress by vm.syncProgress.collectAsStateWithLifecycle()
     val rideStats by vm.rideStats.collectAsStateWithLifecycle()
 
     LaunchedEffect(tours) { controller.setTours(tours) }
@@ -190,22 +193,18 @@ fun MapScreen(vm: MapViewModel) {
                         )
                     }
 
-                    // Status banner (loading progress / results).
-                    status?.let { msg ->
-                        StatusBanner(
-                            text = msg,
-                            loading = isLoading,
-                            modifier = Modifier
-                                .align(if (following) Alignment.TopStart else Alignment.TopCenter)
-                                .padding(top = 64.dp, start = 12.dp, end = 12.dp),
-                        )
-                    }
-
-                    // Loading spinner.
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(28.dp),
-                        )
+                    // Sync/import progress takes precedence; otherwise show the
+                    // transient status banner (results / errors).
+                    val bannerModifier = Modifier
+                        .align(if (following) Alignment.TopStart else Alignment.TopCenter)
+                        .padding(top = 64.dp, start = 12.dp, end = 12.dp)
+                    val sp = syncProgress
+                    if (sp != null) {
+                        SyncBanner(progress = sp, modifier = bannerModifier)
+                    } else {
+                        status?.let { msg ->
+                            StatusBanner(text = msg, loading = isLoading, modifier = bannerModifier)
+                        }
                     }
 
                     // Right-hand action stack.
@@ -278,6 +277,34 @@ private fun StyleFab(current: MapStyleId, onSelect: (MapStyleId) -> Unit) {
 }
 
 @Composable
+private fun SyncBanner(progress: SyncProgress, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.width(240.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.92f),
+        tonalElevation = 3.dp,
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                progress.label,
+                color = MaterialTheme.colorScheme.inverseOnSurface,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(6.dp))
+            val fraction = progress.fraction
+            if (fraction != null) {
+                LinearProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
 private fun StatusBanner(text: String, loading: Boolean, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
@@ -343,6 +370,7 @@ private fun PanelContent(
     val tours by vm.tours.collectAsStateWithLifecycle()
     val dropboxLinked by vm.dropboxLinked.collectAsStateWithLifecycle()
     val dropboxFolder by vm.dropboxFolder.collectAsStateWithLifecycle()
+    val syncProgress by vm.syncProgress.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -366,12 +394,28 @@ private fun PanelContent(
                         onValueChange = { vm.setDropboxFolder(it) },
                         label = { Text("Dropbox folder (blank = root)") },
                         singleLine = true,
+                        enabled = syncProgress == null,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { vm.syncDropbox() }) { Text("Sync") }
-                        OutlinedButton(onClick = { vm.disconnectDropbox() }) { Text("Unlink") }
+                    val sp = syncProgress
+                    if (sp != null) {
+                        Text(sp.label, style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.height(4.dp))
+                        val fraction = sp.fraction
+                        if (fraction != null) {
+                            LinearProgressIndicator(
+                                progress = { fraction },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { vm.syncDropbox() }) { Text("Sync") }
+                            OutlinedButton(onClick = { vm.disconnectDropbox() }) { Text("Unlink") }
+                        }
                     }
                 } else {
                     Button(onClick = onConnectDropbox, modifier = Modifier.fillMaxWidth()) {
@@ -382,7 +426,11 @@ private fun PanelContent(
         }
 
         Spacer(Modifier.height(8.dp))
-        Button(onClick = onImportClick, modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = onImportClick,
+            enabled = syncProgress == null,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Icon(Icons.Filled.Add, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Import GPX files")

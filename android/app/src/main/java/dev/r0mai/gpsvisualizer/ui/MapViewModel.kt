@@ -11,6 +11,7 @@ import dev.r0mai.gpsvisualizer.data.GpxLoadError
 import dev.r0mai.gpsvisualizer.data.LoadedGpx
 import dev.r0mai.gpsvisualizer.data.LocationTracker
 import dev.r0mai.gpsvisualizer.data.RideStats
+import dev.r0mai.gpsvisualizer.data.SyncProgress
 import dev.r0mai.gpsvisualizer.gpx.GpxParser
 import dev.r0mai.gpsvisualizer.gpx.Tour
 import dev.r0mai.gpsvisualizer.gpx.TourPalette
@@ -58,6 +59,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    // Non-null while a Dropbox sync / local import is running.
+    private val _syncProgress = MutableStateFlow<SyncProgress?>(null)
+    val syncProgress: StateFlow<SyncProgress?> = _syncProgress.asStateFlow()
 
     private val _fitEvent = MutableStateFlow(0)
     val fitEvent: StateFlow<Int> = _fitEvent.asStateFlow()
@@ -126,47 +131,53 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Loading --------------------------------------------------------------
 
     fun importLocalFiles(uris: List<Uri>) {
-        if (uris.isEmpty()) return
+        if (uris.isEmpty() || _isLoading.value) return
         viewModelScope.launch {
             _isLoading.value = true
-            _status.value = "Reading ${uris.size} file(s)…"
+            _status.value = null
+            _syncProgress.value = SyncProgress("Reading files", 0, uris.size)
             val loaded = mutableListOf<LoadedGpx>()
             val errors = mutableListOf<GpxLoadError>()
-            for (uri in uris) {
-                try {
-                    loaded.add(FileImport.read(getApplication(), uri))
-                } catch (e: Exception) {
-                    errors.add(GpxLoadError(uri.lastPathSegment ?: "file", e.message ?: "read failed"))
+            try {
+                uris.forEachIndexed { index, uri ->
+                    try {
+                        loaded.add(FileImport.read(getApplication(), uri))
+                    } catch (e: Exception) {
+                        errors.add(GpxLoadError(uri.lastPathSegment ?: "file", e.message ?: "read failed"))
+                    }
+                    _syncProgress.value = SyncProgress("Reading files", index + 1, uris.size)
                 }
+                _syncProgress.value = SyncProgress("Parsing tours…")
+                parseAndAdd(loaded, errors)
+            } finally {
+                _syncProgress.value = null
+                _isLoading.value = false
             }
-            parseAndAdd(loaded, errors)
-            _isLoading.value = false
         }
     }
 
     fun syncDropbox() {
-        if (!dropbox.isLinked) return
+        if (!dropbox.isLinked || _isLoading.value) return
         viewModelScope.launch {
             _isLoading.value = true
+            _status.value = null
+            _syncProgress.value = SyncProgress("Listing Dropbox files…")
             try {
-                _status.value = "Listing Dropbox files…"
                 val files = dropbox.listGpxFiles()
                 if (files.isEmpty()) {
                     _status.value = "No .gpx files found in ${dropbox.folderPath.ifEmpty { "/" }}"
-                    _isLoading.value = false
                     return@launch
                 }
-                _status.value = "Downloading 0/${files.size}…"
+                _syncProgress.value = SyncProgress("Downloading", 0, files.size)
                 val (loaded, dlErrors) = dropbox.downloadAll(files) { done, total ->
-                    _status.value = "Downloading $done/$total…"
+                    _syncProgress.value = SyncProgress("Downloading", done, total)
                 }
-                parseAndAdd(
-                    loaded,
-                    dlErrors.toMutableList(),
-                )
+                _syncProgress.value = SyncProgress("Parsing tours…")
+                parseAndAdd(loaded, dlErrors.toMutableList())
             } catch (e: Exception) {
                 _status.value = "Dropbox error: ${e.message}"
             } finally {
+                _syncProgress.value = null
                 _isLoading.value = false
             }
         }
