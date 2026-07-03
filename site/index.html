@@ -42,6 +42,68 @@
             width: 100%;
         }
         
+        .dropbox-container {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+        }
+
+        .dropbox-btn {
+            width: 100%;
+            padding: 0.6rem;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .dropbox-btn:hover {
+            background-color: #2980b9;
+        }
+
+        .dropbox-btn:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .dropbox-btn-secondary {
+            background-color: #95a5a6;
+        }
+
+        .dropbox-btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        .dropbox-container label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .dropbox-folder-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 0.5rem;
+            box-sizing: border-box;
+        }
+
+        .dropbox-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .dropbox-status {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
         .file-input-container {
             margin-bottom: 1rem;
             padding: 1rem;
@@ -195,9 +257,23 @@
     
     <div class="container">
         <div class="sidebar">
+            <div class="dropbox-container">
+                <button id="dropbox-connect" class="dropbox-btn">Connect Dropbox</button>
+                <div id="dropbox-connected" style="display: none;">
+                    <label for="dropbox-folder">Dropbox folder:</label>
+                    <input type="text" id="dropbox-folder" class="dropbox-folder-input"
+                           placeholder="/Tours (blank = App folder root)">
+                    <div class="dropbox-actions">
+                        <button id="dropbox-sync" class="dropbox-btn">Sync</button>
+                        <button id="dropbox-disconnect" class="dropbox-btn dropbox-btn-secondary">Disconnect</button>
+                    </div>
+                </div>
+                <div id="dropbox-status" class="dropbox-status"></div>
+            </div>
+
             <div class="file-input-container">
-                <label for="gpx-files">Select GPX Files:</label>
-                <input type="file" id="gpx-files" class="file-input" multiple accept=".gpx" 
+                <label for="gpx-files">Or select GPX Files:</label>
+                <input type="file" id="gpx-files" class="file-input" multiple accept=".gpx"
                        title="Select multiple GPX files">
             </div>
             
@@ -260,5 +336,6 @@
     
     <script src="gpx-parser.js"></script>
     <script src="map-visualizer.js"></script>
+    <script src="dropbox.js"></script>
 </body>
 </html> 

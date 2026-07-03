@@ -200,49 +200,78 @@ class MapVisualizer {
         try {
             const promises = gpxFiles.map(file => this.processGPXFile(file));
             const results = await Promise.all(promises);
-            
-            const successfulTours = results.filter(result => result.success);
-            const failedFiles = results.filter(result => !result.success);
-
-            if (successfulTours.length > 0) {
-                // Sort tours by date (newest first)
-                successfulTours.sort((a, b) => {
-                    const dateA = a.tour.time.start;
-                    const dateB = b.tour.time.start;
-                    
-                    // If both have dates, sort by date (newest first)
-                    if (dateA && dateB) {
-                        return new Date(dateB) - new Date(dateA);
-                    }
-                    
-                    // If only one has a date, prioritize the one with date
-                    if (dateA && !dateB) return -1;
-                    if (!dateA && dateB) return 1;
-                    
-                    // If neither has a date, sort alphabetically by filename
-                    return a.filename.localeCompare(b.filename);
-                });
-                
-                successfulTours.forEach(result => {
-                    this.addTour(result.tour);
-                });
-                this.updateUI();
-                this.fitMapToTours();
-                this.initializeTourFilter();
-            }
-
-            if (failedFiles.length > 0) {
-                const errorMessages = failedFiles.map(result => 
-                    `${result.filename}: ${result.error}`
-                ).join('<br>');
-                this.showError(`Failed to parse ${failedFiles.length} file(s):<br>${errorMessages}`);
-            }
-
+            this.finalizeResults(results);
         } catch (error) {
             this.showError('Error processing files: ' + error.message);
         } finally {
             loadingElement.style.display = 'none';
         }
+    }
+
+    // Load GPX files that have already been fetched as text (e.g. from Dropbox).
+    // items: [{ filename, content }] or [{ filename, error }] per file.
+    async loadGPXTexts(items) {
+        const results = items.map(item => {
+            if (item.error) {
+                return { success: false, filename: item.filename, error: item.error };
+            }
+            try {
+                const tour = this.parser.parseGPX(item.content, item.filename);
+                return { success: true, tour: tour };
+            } catch (error) {
+                return { success: false, filename: item.filename, error: error.message };
+            }
+        });
+        this.finalizeResults(results);
+    }
+
+    // Sort, add, and render a batch of parse results; report any failures.
+    finalizeResults(results) {
+        const successfulTours = results.filter(result => result.success);
+        const failedFiles = results.filter(result => !result.success);
+
+        if (successfulTours.length > 0) {
+            // Sort tours by date (newest first)
+            successfulTours.sort((a, b) => {
+                const dateA = a.tour.time.start;
+                const dateB = b.tour.time.start;
+
+                // If both have dates, sort by date (newest first)
+                if (dateA && dateB) {
+                    return new Date(dateB) - new Date(dateA);
+                }
+
+                // If only one has a date, prioritize the one with date
+                if (dateA && !dateB) return -1;
+                if (!dateA && dateB) return 1;
+
+                // If neither has a date, sort alphabetically by filename
+                return a.tour.filename.localeCompare(b.tour.filename);
+            });
+
+            successfulTours.forEach(result => {
+                this.addTour(result.tour);
+            });
+            this.updateUI();
+            this.fitMapToTours();
+            this.initializeTourFilter();
+        }
+
+        if (failedFiles.length > 0) {
+            const errorMessages = failedFiles.map(result =>
+                `${result.filename}: ${result.error}`
+            ).join('<br>');
+            this.showError(`Failed to parse ${failedFiles.length} file(s):<br>${errorMessages}`);
+        }
+    }
+
+    // Remove all loaded tours from the map and sidebar (used before a Dropbox sync).
+    clearTours() {
+        this.tourLayers.forEach(layer => this.map.removeLayer(layer));
+        this.tourLayers.clear();
+        this.tours = [];
+        this.colorIndex = 0;
+        document.getElementById('tour-list').innerHTML = '';
     }
 
     // Process a single GPX file
