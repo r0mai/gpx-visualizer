@@ -3,6 +3,7 @@ package dev.r0mai.gpsvisualizer.map
 import android.annotation.SuppressLint
 import android.content.Context
 import dev.r0mai.gpsvisualizer.gpx.Bounds
+import dev.r0mai.gpsvisualizer.gpx.ROUTE_COLOR_HEX
 import dev.r0mai.gpsvisualizer.gpx.Tour
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -215,25 +216,13 @@ class MapController(private val mapView: MapView) {
                 s.addSource(GeoJsonSource(srcId, FeatureCollection.fromFeatures(lineFeatures)))
                 addedSourceIds.add(srcId)
 
-                val casingId = "$key-casing"
-                s.addLayer(
-                    LineLayer(casingId, srcId).withProperties(
-                        lineColor("#ffffff"),
-                        lineWidth(6.5f),
-                        lineOpacity(0.55f),
-                        lineCap(Property.LINE_CAP_ROUND),
-                        lineJoin(Property.LINE_JOIN_ROUND),
-                        visibility(vis),
-                    ),
-                )
-                addedLayerIds.add(casingId)
-
+                // Single solid red line, no casing/outline: a "coverage" mask.
                 val lineId = "$key-line"
                 s.addLayer(
                     LineLayer(lineId, srcId).withProperties(
-                        lineColor(tour.colorHex),
-                        lineWidth(3.5f),
-                        lineOpacity(0.95f),
+                        lineColor(ROUTE_COLOR_HEX),
+                        lineWidth(ROUTE_WIDTH),
+                        lineOpacity(1.0f),
                         lineCap(Property.LINE_CAP_ROUND),
                         lineJoin(Property.LINE_JOIN_ROUND),
                         visibility(vis),
@@ -253,7 +242,7 @@ class MapController(private val mapView: MapView) {
                 val wLayer = "$key-wpt"
                 s.addLayer(
                     CircleLayer(wLayer, wSrc).withProperties(
-                        circleColor(tour.colorHex),
+                        circleColor(ROUTE_COLOR_HEX),
                         circleRadius(4.5f),
                         circleStrokeColor("#ffffff"),
                         circleStrokeWidth(1.5f),
@@ -269,7 +258,7 @@ class MapController(private val mapView: MapView) {
         val s = style ?: return
         tours.forEachIndexed { index, tour ->
             val vis = if (tour.visible) Property.VISIBLE else Property.NONE
-            listOf("tour-$index-casing", "tour-$index-line", "tour-$index-wpt").forEach { id ->
+            listOf("tour-$index-line", "tour-$index-wpt").forEach { id ->
                 s.getLayer(id)?.setProperties(visibility(vis))
             }
         }
@@ -348,6 +337,7 @@ class MapController(private val mapView: MapView) {
     }
 
     companion object {
+        private const val ROUTE_WIDTH = 5.0f
         private const val FOLLOW_ZOOM = 16.0
         private const val FOLLOW_TILT_3D = 55.0
         private const val FREE_TILT_3D = 55.0

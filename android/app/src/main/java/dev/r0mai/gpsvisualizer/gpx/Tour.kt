@@ -94,6 +94,14 @@ object Format {
     fun elevation(m: Double?): String = if (m == null) "–" else "${m.toInt()} m"
 }
 
+/**
+ * Every tracked route renders in this single solid color. The goal is a
+ * "coverage" view — overlapping rides merge into one red mask over the
+ * streets/paths already ridden — so per-tour colors are intentionally not used
+ * on the map. Change this one value to recolor all routes.
+ */
+const val ROUTE_COLOR_HEX = "#E53935"
+
 /** Palette used to color successive tours; cycles when exhausted. */
 object TourPalette {
     val colors = listOf(

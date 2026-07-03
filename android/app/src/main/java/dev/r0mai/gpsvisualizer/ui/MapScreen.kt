@@ -76,6 +76,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.r0mai.gpsvisualizer.data.SyncProgress
 import dev.r0mai.gpsvisualizer.gpx.Format
+import dev.r0mai.gpsvisualizer.gpx.ROUTE_COLOR_HEX
 import dev.r0mai.gpsvisualizer.gpx.Tour
 import dev.r0mai.gpsvisualizer.map.MapController
 import dev.r0mai.gpsvisualizer.map.MapStyleId
@@ -502,7 +503,7 @@ private fun TourRow(tour: Tour, onToggle: () -> Unit, onClick: () -> Unit) {
             Box(
                 Modifier
                     .size(14.dp)
-                    .background(safeColor(tour.colorHex), CircleShape),
+                    .background(safeColor(ROUTE_COLOR_HEX), CircleShape),
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
