@@ -156,6 +156,10 @@ fun MapScreen(vm: MapViewModel) {
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        // Open only via the menu button (no swipe-to-open), so horizontal map
+        // pans aren't intercepted. Gestures stay on while open so a scrim tap /
+        // swipe still closes it.
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet {
                 PanelContent(
