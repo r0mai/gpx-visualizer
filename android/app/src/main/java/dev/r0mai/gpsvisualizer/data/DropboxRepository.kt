@@ -15,6 +15,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Loads GPX files from Dropbox using the official SDK with PKCE + offline
@@ -27,6 +28,13 @@ class DropboxRepository(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("dropbox", Context.MODE_PRIVATE)
     private val requestConfig = DbxRequestConfig.newBuilder("gps-visualizer-android/1.0").build()
+
+    // Persistent on-disk cache of downloaded GPX, keyed by file id + revision.
+    // Lets a sync re-use previously downloaded files and fetch only new/changed
+    // ones, so re-opening the app doesn't re-download the whole folder.
+    private val cacheDir: File by lazy {
+        File(appContext.filesDir, "dropbox-cache").apply { mkdirs() }
+    }
 
     private var client: DbxClientV2? = null
 
@@ -64,6 +72,7 @@ class DropboxRepository(context: Context) {
     fun unlink() {
         prefs.edit().remove(KEY_CREDENTIAL).apply()
         client = null
+        clearCache()
     }
 
     private fun requireClient(): DbxClientV2 {
@@ -99,8 +108,10 @@ class DropboxRepository(context: Context) {
     }
 
     /**
-     * Download all [files], up to 6 concurrently, reporting progress. Successes
-     * land in the returned pair's first list, failures in the second.
+     * Resolve all [files] to GPX text, up to 6 concurrently, reporting progress.
+     * Files already cached at their current revision are read from disk; only
+     * new or changed files are downloaded. Successes land in the returned pair's
+     * first list, failures in the second.
      */
     suspend fun downloadAll(
         files: List<FileMetadata>,
@@ -117,8 +128,16 @@ class DropboxRepository(context: Context) {
             async(Dispatchers.IO) {
                 semaphore.withPermit {
                     try {
-                        val text = requireClient().files().download(file.pathLower).use { d ->
-                            d.inputStream.readBytes().toString(Charsets.UTF_8)
+                        val cacheFile = cacheFileFor(file)
+                        val cached =
+                            if (cacheFile.exists()) runCatching { cacheFile.readText() }.getOrNull()
+                            else null
+                        val text = cached ?: run {
+                            val downloaded = requireClient().files().download(file.pathLower).use { d ->
+                                d.inputStream.readBytes().toString(Charsets.UTF_8)
+                            }
+                            writeCache(file, downloaded)
+                            downloaded
                         }
                         synchronized(lock) { loaded.add(LoadedGpx(file.name, text)) }
                     } catch (e: Exception) {
@@ -135,6 +154,25 @@ class DropboxRepository(context: Context) {
 
         loaded to errors
     }
+
+    /** Cache file for a Dropbox file at its current revision (id + rev key). */
+    private fun cacheFileFor(file: FileMetadata): File =
+        File(cacheDir, "${sanitize(file.id)}_${sanitize(file.rev)}.gpx")
+
+    /** Store fresh bytes, discarding any older-revision copy of the same file. */
+    private fun writeCache(file: FileMetadata, content: String) {
+        val prefix = "${sanitize(file.id)}_"
+        cacheDir.listFiles()?.forEach { f -> if (f.name.startsWith(prefix)) f.delete() }
+        runCatching { cacheFileFor(file).writeText(content) }
+    }
+
+    private fun clearCache() {
+        runCatching { cacheDir.listFiles()?.forEach { it.delete() } }
+    }
+
+    // Keep the Dropbox id/rev tokens (already [A-Za-z0-9_-]) intact and replace
+    // only structural chars like ':' so distinct files never share a cache name.
+    private fun sanitize(s: String): String = s.replace(Regex("[^A-Za-z0-9_-]"), "_")
 
     private fun normalizePath(path: String): String {
         var p = path.trim()

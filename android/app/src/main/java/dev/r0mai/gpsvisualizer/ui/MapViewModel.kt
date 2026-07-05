@@ -188,9 +188,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
                     _status.value = "No .gpx files found in ${dropbox.folderPath.ifEmpty { "/" }}"
                     return@launch
                 }
-                _syncProgress.value = SyncProgress("Downloading", 0, files.size)
+                // Cached files load from disk; only new/changed ones download.
+                _syncProgress.value = SyncProgress("Loading", 0, files.size)
                 val (loaded, dlErrors) = dropbox.downloadAll(files) { done, total ->
-                    _syncProgress.value = SyncProgress("Downloading", done, total)
+                    _syncProgress.value = SyncProgress("Loading", done, total)
                 }
                 _syncProgress.value = SyncProgress("Parsing tours…")
                 parseAndAdd(loaded, dlErrors.toMutableList())
