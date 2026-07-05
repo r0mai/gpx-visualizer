@@ -8,6 +8,17 @@ plugins {
 // PKCE "app key" with no secret, so it is safe to keep in source.
 val dropboxAppKey = "kkon8scyxqw70w9"
 
+// Release signing pulls its keystore from the environment (set by CI from repo
+// secrets) so every published APK shares one signature and updates install over
+// previous ones. When the keystore is absent (local builds), release builds are
+// simply left unsigned; debug builds are unaffected.
+val releaseStoreFile: String? = System.getenv("KEYSTORE_FILE")
+val hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists()
+
+// Monotonic version from the CI run number so each build is a real "update".
+val buildVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
+val buildVersionName = System.getenv("VERSION_NAME") ?: "1.0"
+
 android {
     namespace = "dev.r0mai.gpsvisualizer"
     compileSdk = 34
@@ -16,13 +27,24 @@ android {
         applicationId = "dev.r0mai.gpsvisualizer"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = buildVersionCode
+        versionName = buildVersionName
 
         // Injected into AndroidManifest for the Dropbox OAuth redirect scheme
         // (db-<APP_KEY>) and exposed to code via BuildConfig.
         manifestPlaceholders["dropboxAppKey"] = dropboxAppKey
         buildConfigField("String", "DROPBOX_APP_KEY", "\"$dropboxAppKey\"")
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -32,6 +54,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
