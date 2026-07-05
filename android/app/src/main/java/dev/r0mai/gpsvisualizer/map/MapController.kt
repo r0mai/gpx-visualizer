@@ -67,6 +67,11 @@ class MapController(private val mapView: MapView) {
     private var locationActivated = false
     private var pendingFit = false
 
+    // System-bar insets (px) so the top-right compass clears the transparent
+    // status bar / navigation buttons.
+    private var compassTopMarginPx = 0
+    private var compassRightMarginPx = 0
+
     /** Called when a user gesture breaks follow mode so the UI can update its toggle. */
     var onFollowCancelled: (() -> Unit)? = null
 
@@ -88,6 +93,7 @@ class MapController(private val mapView: MapView) {
                 setLogoGravity(bottomCenter)
                 setAttributionGravity(bottomCenter)
             }
+            applyCompassMargins()
             m.setMinZoomPreference(2.0)
             m.setMaxZoomPreference(20.0)
             m.moveCamera(
@@ -154,6 +160,18 @@ class MapController(private val mapView: MapView) {
         if (granted && style != null && !locationActivated) {
             setupLocationComponent()
         }
+    }
+
+    /** Offset the top-right compass by the system-bar insets (in px). */
+    fun setCompassMargins(topPx: Int, rightPx: Int) {
+        compassTopMarginPx = topPx
+        compassRightMarginPx = rightPx
+        applyCompassMargins()
+    }
+
+    private fun applyCompassMargins() {
+        val m = map ?: return
+        m.uiSettings.setCompassMargins(0, compassTopMarginPx, compassRightMarginPx, 0)
     }
 
     fun fitToVisibleTours() {

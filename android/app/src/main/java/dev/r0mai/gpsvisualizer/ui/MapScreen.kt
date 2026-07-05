@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -68,6 +70,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -122,6 +126,18 @@ fun MapScreen(vm: MapViewModel) {
     LaunchedEffect(locationEnabled) { controller.setLocationEnabled(locationEnabled) }
     LaunchedEffect(hasPerm) { controller.setLocationPermission(hasPerm) }
     LaunchedEffect(fitEvent) { if (fitEvent > 0) controller.fitToVisibleTours() }
+
+    // Push the top-right compass in past the transparent status bar / nav
+    // buttons so it isn't hidden behind them.
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val systemBars = WindowInsets.systemBars
+    val compassTopPx = systemBars.getTop(density)
+    val compassRightPx = systemBars.getRight(density, layoutDirection)
+    val compassBasePx = with(density) { 8.dp.roundToPx() }
+    LaunchedEffect(compassTopPx, compassRightPx, compassBasePx) {
+        controller.setCompassMargins(compassTopPx + compassBasePx, compassRightPx + compassBasePx)
+    }
 
     // Location permission.
     LaunchedEffect(Unit) { vm.setLocationPermission(hasLocationPermission(context)) }
