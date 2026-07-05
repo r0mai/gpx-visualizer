@@ -16,6 +16,9 @@ const DROPBOX_SCOPES = 'files.metadata.read files.content.read';
 const LS_REFRESH_TOKEN = 'dropbox_refresh_token';
 const LS_FOLDER_PATH = 'dropbox_folder_path';
 const SS_PKCE_VERIFIER = 'dropbox_pkce_verifier';
+// Prefix for cached GPX contents; one localStorage entry per Dropbox file id.
+// The version suffix lets us invalidate the format later by bumping it.
+const LS_CACHE_PREFIX = 'dropbox_gpx_cache_v1:';
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
@@ -246,8 +249,10 @@ class DropboxClient {
     }
 
     // Download many files with a small concurrency limit. Returns
-    // [{ filename, content }] or [{ filename, error }] per file.
-    async downloadAll(files, onProgress) {
+    // [{ filename, content }] or [{ filename, error }] per file. If a cache is
+    // given, files already cached at their current revision are served from it
+    // and freshly downloaded files are written back.
+    async downloadAll(files, onProgress, cache) {
         const results = [];
         let done = 0;
         let idx = 0;
@@ -257,7 +262,11 @@ class DropboxClient {
             while (idx < files.length) {
                 const file = files[idx++];
                 try {
-                    const content = await this.downloadFile(file.path_lower);
+                    let content = cache ? cache.get(file.id, file.rev) : null;
+                    if (content == null) {
+                        content = await this.downloadFile(file.path_lower);
+                        if (cache) cache.set(file.id, file.rev, file.name, content);
+                    }
                     results.push({ filename: file.name, content: content });
                 } catch (e) {
                     results.push({ filename: file.name, error: e.message });
@@ -273,18 +282,79 @@ class DropboxClient {
 }
 
 // ---------------------------------------------------------------------------
+// Persistent cache of downloaded GPX text
+// ---------------------------------------------------------------------------
+
+// Stores each downloaded file's text in localStorage, keyed by Dropbox file id
+// and tagged with its revision, so a re-sync only downloads files that are new
+// or whose contents changed. Keying by id (which is stable across renames)
+// means a new revision overwrites the old one — no stale copies pile up.
+class DropboxGpxCache {
+    keyFor(id) {
+        return LS_CACHE_PREFIX + id;
+    }
+
+    // Return the cached text for this file if we have it at this exact
+    // revision, otherwise null (missing or the file changed on Dropbox).
+    get(id, rev) {
+        try {
+            const raw = localStorage.getItem(this.keyFor(id));
+            if (!raw) return null;
+            const entry = JSON.parse(raw);
+            return entry && entry.rev === rev ? entry.content : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Store a file's text. Gives up silently if storage is full so a sync
+    // never fails just because the cache couldn't grow.
+    set(id, rev, name, content) {
+        try {
+            localStorage.setItem(this.keyFor(id), JSON.stringify({ rev, name, content }));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Number of files currently cached.
+    count() {
+        let n = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(LS_CACHE_PREFIX)) n++;
+        }
+        return n;
+    }
+
+    // Drop every cached file. Returns how many entries were removed.
+    clear() {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(LS_CACHE_PREFIX)) keys.push(k);
+        }
+        keys.forEach((k) => localStorage.removeItem(k));
+        return keys.length;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------------
 
 document.addEventListener('DOMContentLoaded', async () => {
     const client = new DropboxClient(DROPBOX_APP_KEY);
     window.dropboxClient = client;
+    const cache = new DropboxGpxCache();
 
     const connectBtn = document.getElementById('dropbox-connect');
     const connectedBox = document.getElementById('dropbox-connected');
     const folderInput = document.getElementById('dropbox-folder');
     const syncBtn = document.getElementById('dropbox-sync');
     const disconnectBtn = document.getElementById('dropbox-disconnect');
+    const clearCacheBtn = document.getElementById('dropbox-clear-cache');
     const statusEl = document.getElementById('dropbox-status');
 
     if (!connectBtn) return; // Dropbox UI not present
@@ -314,14 +384,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showStatus('No .gpx files found in ' + (folder || '/'));
                 return;
             }
-            showStatus(`Downloading 0/${files.length}…`);
-            const items = await client.downloadAll(files, (d, t) => {
-                showStatus(`Downloading ${d}/${t}…`);
-            });
+            const cachedCount = files.filter((f) => cache.get(f.id, f.rev) !== null).length;
+            const toDownload = files.length - cachedCount;
+            showStatus(toDownload > 0 ? `Downloading 0/${toDownload}…` : 'Loading from cache…');
+            let downloaded = 0;
+            const items = await client.downloadAll(files, () => {
+                // Only count actual network downloads towards progress.
+                if (downloaded < toDownload) {
+                    downloaded++;
+                    showStatus(`Downloading ${downloaded}/${toDownload}…`);
+                }
+            }, cache);
             window.mapVisualizer.clearTours();
             await window.mapVisualizer.loadGPXTexts(items);
             const ok = items.filter((i) => !i.error).length;
-            showStatus(`Loaded ${ok} tour(s) from Dropbox.`);
+            const cacheNote = cachedCount > 0 ? ` (${cachedCount} from cache)` : '';
+            showStatus(`Loaded ${ok} tour(s) from Dropbox${cacheNote}.`);
         } catch (e) {
             showStatus('Error: ' + e.message);
             if (!client.isConnected()) updateUI();
@@ -336,9 +414,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     disconnectBtn.addEventListener('click', () => {
         client.disconnect();
+        cache.clear();
         updateUI();
         showStatus('Disconnected.');
     });
+
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', () => {
+            const n = cache.clear();
+            showStatus(`Cleared ${n} cached file(s).`);
+        });
+    }
 
     syncBtn.addEventListener('click', sync);
     folderInput.value = localStorage.getItem(LS_FOLDER_PATH) || '';
