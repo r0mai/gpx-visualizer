@@ -57,6 +57,7 @@ class MapController(private val mapView: MapView) {
     private var styleId = MapStyleId.OPENTOPO
     private var pitch3d = false
     private var following = false
+    private var locationEnabled = false
     private var hasLocationPermission = false
     private var tours: List<Tour> = emptyList()
 
@@ -133,6 +134,12 @@ class MapController(private val mapView: MapView) {
         following = enabled && hasLocationPermission
         applyFollowCamera()
         if (!enabled) applyPitch(animate = true)
+    }
+
+    /** Show/hide the position marker (and its GPS engine) independent of follow. */
+    fun setLocationEnabled(enabled: Boolean) {
+        locationEnabled = enabled && hasLocationPermission
+        applyFollowCamera()
     }
 
     fun setTours(newTours: List<Tour>) {
@@ -296,10 +303,12 @@ class MapController(private val mapView: MapView) {
 
     private fun applyFollowCamera() {
         val lc = locationComponentOrNull() ?: return
-        // The location component (and thus the GPS radio + its per-frame
-        // rendering) only runs while actively following, to avoid draining the
-        // battery when the user is just browsing the map.
-        lc.isLocationComponentEnabled = following
+        // The location marker (and thus the GPS radio + its per-frame rendering)
+        // runs while location is enabled, so the position marker stays visible
+        // even after a pan cancels follow. It is disabled — saving battery when
+        // just browsing — once the user turns location off via the follow FAB.
+        // Only camera tracking is tied to `following`.
+        lc.isLocationComponentEnabled = locationEnabled
         if (following) {
             // GPS render mode orients the puck from the GPS course, so no
             // magnetometer/compass sensor is used.

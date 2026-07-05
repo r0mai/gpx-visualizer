@@ -107,6 +107,7 @@ fun MapScreen(vm: MapViewModel) {
     val styleId by vm.styleId.collectAsStateWithLifecycle()
     val is3D by vm.is3D.collectAsStateWithLifecycle()
     val following by vm.isFollowing.collectAsStateWithLifecycle()
+    val locationEnabled by vm.locationEnabled.collectAsStateWithLifecycle()
     val hasPerm by vm.hasLocationPermission.collectAsStateWithLifecycle()
     val fitEvent by vm.fitEvent.collectAsStateWithLifecycle()
     val isLoading by vm.isLoading.collectAsStateWithLifecycle()
@@ -118,6 +119,7 @@ fun MapScreen(vm: MapViewModel) {
     LaunchedEffect(styleId) { controller.setStyle(styleId) }
     LaunchedEffect(is3D) { controller.set3D(is3D) }
     LaunchedEffect(following) { controller.setFollowing(following) }
+    LaunchedEffect(locationEnabled) { controller.setLocationEnabled(locationEnabled) }
     LaunchedEffect(hasPerm) { controller.setLocationPermission(hasPerm) }
     LaunchedEffect(fitEvent) { if (fitEvent > 0) controller.fitToVisibleTours() }
 

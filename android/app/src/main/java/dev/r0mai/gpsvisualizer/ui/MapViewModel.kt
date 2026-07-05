@@ -45,6 +45,12 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     private val _isFollowing = MutableStateFlow(false)
     val isFollowing: StateFlow<Boolean> = _isFollowing.asStateFlow()
 
+    // Marker visibility is decoupled from camera-follow: a pan gesture stops
+    // following but keeps the position marker on the map. Turning location off
+    // (tapping the follow FAB while following) disables both to save power.
+    private val _locationEnabled = MutableStateFlow(false)
+    val locationEnabled: StateFlow<Boolean> = _locationEnabled.asStateFlow()
+
     private val _hasLocationPermission = MutableStateFlow(false)
     val hasLocationPermission: StateFlow<Boolean> = _hasLocationPermission.asStateFlow()
 
@@ -75,19 +81,33 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggle3D() { _is3D.value = !_is3D.value }
 
-    fun toggleFollow() { _isFollowing.value = !_isFollowing.value }
+    // Follow FAB. Cycles: off → show marker + follow → (after a pan) marker
+    // stays but camera detaches → tap re-centers/re-follows; tapping while
+    // actively following turns location off entirely.
+    fun toggleFollow() {
+        when {
+            !_locationEnabled.value -> { _locationEnabled.value = true; _isFollowing.value = true }
+            !_isFollowing.value -> { _isFollowing.value = true }
+            else -> { _isFollowing.value = false; _locationEnabled.value = false }
+        }
+    }
 
     fun setFollowing(on: Boolean) {
         _isFollowing.value = on
+        if (on) _locationEnabled.value = true
     }
 
     fun onFollowCancelledByGesture() {
+        // Keep the marker visible; only detach the camera from the location.
         _isFollowing.value = false
     }
 
     fun setLocationPermission(granted: Boolean) {
         _hasLocationPermission.value = granted
-        if (!granted) setFollowing(false)
+        if (!granted) {
+            _isFollowing.value = false
+            _locationEnabled.value = false
+        }
     }
 
     // React to follow changes for the HUD tracker.
