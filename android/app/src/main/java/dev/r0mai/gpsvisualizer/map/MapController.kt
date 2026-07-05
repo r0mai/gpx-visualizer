@@ -384,7 +384,7 @@ class MapController(private val mapView: MapView) {
 
         m.locationComponent.activateLocationComponent(options)
         locationActivated = true
-        // applyFollowCamera enables the component + GPS only when following.
+        // applyFollowCamera enables the component + GPS only once location is on.
         applyFollowCamera()
     }
 
