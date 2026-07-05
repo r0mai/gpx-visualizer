@@ -2,6 +2,7 @@ package dev.r0mai.gpsvisualizer.map
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.view.Gravity
 import dev.r0mai.gpsvisualizer.gpx.Bounds
 import dev.r0mai.gpsvisualizer.gpx.ROUTE_COLOR_HEX
 import dev.r0mai.gpsvisualizer.gpx.Tour
@@ -76,6 +77,12 @@ class MapController(private val mapView: MapView) {
                 isCompassEnabled = true
                 isAttributionEnabled = true
                 isLogoEnabled = true
+                // Keep the logo + attribution at the bottom-center so they stay
+                // clear of the lower-left ride HUD (portrait) and the lower-right
+                // control stack.
+                val bottomCenter = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                setLogoGravity(bottomCenter)
+                setAttributionGravity(bottomCenter)
             }
             m.setMinZoomPreference(2.0)
             m.setMaxZoomPreference(20.0)
