@@ -13,6 +13,7 @@ package dev.r0mai.gpsvisualizer.map
  * `"terrain": { "source": "terrain-dem", "exaggeration": … }` property here.
  */
 enum class MapStyleId(val label: String) {
+    OSM("OpenStreetMap"),
     OPENTOPO("OpenTopoMap"),
     CYCLOSM("CyclOSM (MTB)"),
     SATELLITE("Satellite"),
@@ -26,6 +27,15 @@ object MapStyles {
 
     fun json(id: MapStyleId): String {
         val (baseSource, attribution) = when (id) {
+            MapStyleId.OSM -> rasterSource(
+                tiles = listOf(
+                    "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                ),
+                maxZoom = 19,
+            ) to "© OpenStreetMap contributors"
+
             MapStyleId.OPENTOPO -> rasterSource(
                 tiles = listOf(
                     "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
