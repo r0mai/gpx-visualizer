@@ -8,6 +8,9 @@ class MapVisualizer {
         this.parser = new GPXParser();
         this.colors = [ '#e74c3c' ];
         this.colorIndex = 0;
+        // Color used to make a hovered/selected route stand out from the
+        // (often overlapping) rest, which all share the base color above.
+        this.highlightColor = '#2979ff';
         
         this.initializeMap();
         this.setupEventListeners();
@@ -410,15 +413,26 @@ class MapVisualizer {
     // Highlight a specific tour and fade others
     highlightTour(activeFilename) {
         this.tourLayers.forEach((layerGroup, filename) => {
-            const opacity = filename === activeFilename ? 1.0 : 0.3;
-            const weight = filename === activeFilename ? 4 : 2;
-            
+            const isActive = filename === activeFilename;
+            const tour = this.tours.find(t => t.filename === filename);
+            const baseColor = tour ? tour.color : this.colors[0];
+            const opacity = isActive ? 1.0 : 0.3;
+            const weight = isActive ? 4 : 2;
+
             layerGroup.eachLayer(layer => {
                 if (layer.setStyle && typeof layer.setStyle === 'function') {
-                    layer.setStyle({
-                        opacity: opacity,
-                        weight: weight
-                    });
+                    const style = { opacity: opacity, weight: weight };
+                    // Only recolor line geometry; waypoint markers keep their
+                    // white border. Overlapping routes share a color, so the
+                    // active one gets a distinct highlight color to stand out.
+                    if (layer instanceof L.Polyline) {
+                        style.color = isActive ? this.highlightColor : baseColor;
+                    }
+                    layer.setStyle(style);
+                    // Draw the highlighted route on top of the overlapping ones.
+                    if (isActive && layer.bringToFront) {
+                        layer.bringToFront();
+                    }
                 }
             });
         });
@@ -430,12 +444,15 @@ class MapVisualizer {
     // Reset all tours to normal appearance
     unhighlightAllTours() {
         this.tourLayers.forEach((layerGroup, filename) => {
+            const tour = this.tours.find(t => t.filename === filename);
+            const baseColor = tour ? tour.color : this.colors[0];
             layerGroup.eachLayer(layer => {
                 if (layer.setStyle && typeof layer.setStyle === 'function') {
-                    layer.setStyle({
-                        opacity: 0.8,
-                        weight: 3
-                    });
+                    const style = { opacity: 0.8, weight: 3 };
+                    if (layer instanceof L.Polyline) {
+                        style.color = baseColor;
+                    }
+                    layer.setStyle(style);
                 }
             });
         });
@@ -450,10 +467,10 @@ class MapVisualizer {
         tourItems.forEach(item => {
             const checkbox = item.querySelector('.tour-checkbox');
             if (highlight && checkbox && checkbox.dataset.filename === filename) {
-                item.style.backgroundColor = '#ffebee';
+                item.style.backgroundColor = '#e3f0ff';
                 item.style.transform = 'scale(1.02)';
                 item.style.transition = 'all 0.2s ease';
-                item.style.boxShadow = '0 2px 8px rgba(231, 76, 60, 0.3)';
+                item.style.boxShadow = '0 2px 8px rgba(41, 121, 255, 0.3)';
             } else {
                 item.style.backgroundColor = '';
                 item.style.transform = '';
