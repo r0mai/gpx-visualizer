@@ -11,12 +11,15 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
+import org.maplibre.android.location.LocationComponentConstants
+import org.maplibre.android.location.LocationComponentOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.Layer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.circleColor
@@ -206,6 +209,16 @@ class MapController(private val mapView: MapView) {
         addedLayerIds.clear()
         addedSourceIds.clear()
 
+        // Keep tour overlays beneath the location puck so the position marker
+        // always draws on top of the red route/waypoint markers. Once the
+        // location component is activated its layers live in the style; anchor
+        // tour layers below the bottom-most one (s.layers is bottom-to-top).
+        // Before activation there is no anchor, so layers append on top.
+        val locationAnchor = s.layers.firstOrNull { it.id in LOCATION_LAYER_IDS }?.id
+        val addTourLayer: (Layer) -> Unit = { layer ->
+            if (locationAnchor != null) s.addLayerBelow(layer, locationAnchor) else s.addLayer(layer)
+        }
+
         tours.forEachIndexed { index, tour ->
             val key = "tour-$index"
             val vis = if (tour.visible) Property.VISIBLE else Property.NONE
@@ -224,7 +237,7 @@ class MapController(private val mapView: MapView) {
 
                 // Single solid red line, no casing/outline: a "coverage" mask.
                 val lineId = "$key-line"
-                s.addLayer(
+                addTourLayer(
                     LineLayer(lineId, srcId).withProperties(
                         lineColor(ROUTE_COLOR_HEX),
                         lineWidth(ROUTE_WIDTH),
@@ -246,7 +259,7 @@ class MapController(private val mapView: MapView) {
                 addedSourceIds.add(wSrc)
 
                 val wLayer = "$key-wpt"
-                s.addLayer(
+                addTourLayer(
                     CircleLayer(wLayer, wSrc).withProperties(
                         circleColor(ROUTE_COLOR_HEX),
                         circleRadius(4.5f),
@@ -332,7 +345,13 @@ class MapController(private val mapView: MapView) {
 
         // No pulse animation: it would render every frame forever and never let
         // the GPU idle. The puck is drawn statically and updates on demand.
+        // A reduced icon scale keeps the position marker small and unobtrusive.
+        val componentOptions = LocationComponentOptions.builder(context)
+            .minZoomIconScale(LOCATION_ICON_SCALE)
+            .maxZoomIconScale(LOCATION_ICON_SCALE)
+            .build()
         val options = LocationComponentActivationOptions.builder(context, s)
+            .locationComponentOptions(componentOptions)
             .useDefaultLocationEngine(true)
             .build()
 
@@ -348,5 +367,19 @@ class MapController(private val mapView: MapView) {
         private const val FOLLOW_TILT_3D = 55.0
         private const val FREE_TILT_3D = 55.0
         private const val FIT_PADDING_PX = 90
+
+        // Shrink the default location puck (default max scale is 1.0).
+        private const val LOCATION_ICON_SCALE = 0.6f
+
+        // Layer ids the location component registers in the style; used to keep
+        // tour overlays anchored beneath the position marker.
+        private val LOCATION_LAYER_IDS = setOf(
+            LocationComponentConstants.SHADOW_LAYER,
+            LocationComponentConstants.BACKGROUND_LAYER,
+            LocationComponentConstants.FOREGROUND_LAYER,
+            LocationComponentConstants.BEARING_LAYER,
+            LocationComponentConstants.ACCURACY_LAYER,
+            LocationComponentConstants.PULSING_CIRCLE_LAYER,
+        )
     }
 }
