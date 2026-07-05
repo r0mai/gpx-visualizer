@@ -262,12 +262,13 @@ class DropboxClient {
             while (idx < files.length) {
                 const file = files[idx++];
                 try {
-                    let content = cache ? cache.get(file.id, file.rev) : null;
-                    if (content == null) {
+                    let content = cache ? await cache.get(file.id, file.rev) : null;
+                    const wasCached = content != null;
+                    if (!wasCached) {
                         content = await this.downloadFile(file.path_lower);
-                        if (cache) cache.set(file.id, file.rev, file.name, content);
+                        if (cache) await cache.set(file.id, file.rev, file.name, content);
                     }
-                    results.push({ filename: file.name, content: content });
+                    results.push({ filename: file.name, content: content, cached: wasCached });
                 } catch (e) {
                     results.push({ filename: file.name, error: e.message });
                 }
@@ -285,33 +286,74 @@ class DropboxClient {
 // Persistent cache of downloaded GPX text
 // ---------------------------------------------------------------------------
 
-// Stores each downloaded file's text in localStorage, keyed by Dropbox file id
-// and tagged with its revision, so a re-sync only downloads files that are new
-// or whose contents changed. Keying by id (which is stable across renames)
-// means a new revision overwrites the old one — no stale copies pile up.
+// Stores each downloaded file's text in IndexedDB, keyed by Dropbox file id and
+// tagged with its revision, so a re-sync only downloads files that are new or
+// whose contents changed. Keying by id (which is stable across renames) means a
+// new revision overwrites the old one — no stale copies pile up.
+//
+// IndexedDB is used rather than localStorage because localStorage caps an origin
+// at ~5 MB, which only fits a couple dozen GPX tracks; IndexedDB's quota scales
+// with free disk, so a whole folder fits. All methods are async and degrade to
+// a no-op (never throwing) if IndexedDB is unavailable, e.g. in private mode.
 class DropboxGpxCache {
-    keyFor(id) {
-        return LS_CACHE_PREFIX + id;
+    constructor() {
+        this.dbName = 'dropbox_gpx_cache';
+        this.storeName = 'files';
+        this.dbPromise = null;
+        // Reclaim space from the old localStorage-based cache, if any.
+        this._purgeLegacyLocalStorage();
+    }
+
+    _open() {
+        if (this.dbPromise) return this.dbPromise;
+        this.dbPromise = new Promise((resolve, reject) => {
+            if (!('indexedDB' in window) || !window.indexedDB) {
+                reject(new Error('IndexedDB is not available'));
+                return;
+            }
+            const req = window.indexedDB.open(this.dbName, 1);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(this.storeName)) {
+                    db.createObjectStore(this.storeName, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        return this.dbPromise;
+    }
+
+    // Run fn(store) inside a transaction and resolve with the request's result.
+    async _tx(mode, fn) {
+        const db = await this._open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(this.storeName, mode);
+            const req = fn(tx.objectStore(this.storeName));
+            let result;
+            if (req) req.onsuccess = () => { result = req.result; };
+            tx.oncomplete = () => resolve(result);
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
+        });
     }
 
     // Return the cached text for this file if we have it at this exact
     // revision, otherwise null (missing or the file changed on Dropbox).
-    get(id, rev) {
+    async get(id, rev) {
         try {
-            const raw = localStorage.getItem(this.keyFor(id));
-            if (!raw) return null;
-            const entry = JSON.parse(raw);
+            const entry = await this._tx('readonly', (store) => store.get(id));
             return entry && entry.rev === rev ? entry.content : null;
         } catch (e) {
             return null;
         }
     }
 
-    // Store a file's text. Gives up silently if storage is full so a sync
-    // never fails just because the cache couldn't grow.
-    set(id, rev, name, content) {
+    // Store a file's text. Gives up silently if the write fails (e.g. disk
+    // quota) so a sync never fails just because the cache couldn't grow.
+    async set(id, rev, name, content) {
         try {
-            localStorage.setItem(this.keyFor(id), JSON.stringify({ rev, name, content }));
+            await this._tx('readwrite', (store) => store.put({ id, rev, name, content }));
             return true;
         } catch (e) {
             return false;
@@ -319,24 +361,39 @@ class DropboxGpxCache {
     }
 
     // Number of files currently cached.
-    count() {
-        let n = 0;
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k && k.startsWith(LS_CACHE_PREFIX)) n++;
+    async count() {
+        try {
+            return await this._tx('readonly', (store) => store.count());
+        } catch (e) {
+            return 0;
         }
-        return n;
     }
 
     // Drop every cached file. Returns how many entries were removed.
-    clear() {
-        const keys = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k && k.startsWith(LS_CACHE_PREFIX)) keys.push(k);
+    async clear() {
+        this._purgeLegacyLocalStorage();
+        try {
+            const n = await this.count();
+            await this._tx('readwrite', (store) => store.clear());
+            return n;
+        } catch (e) {
+            return 0;
         }
-        keys.forEach((k) => localStorage.removeItem(k));
-        return keys.length;
+    }
+
+    // Remove entries written by the previous localStorage-based cache so that
+    // ~5 MB of dead data doesn't linger after upgrading to IndexedDB.
+    _purgeLegacyLocalStorage() {
+        try {
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith(LS_CACHE_PREFIX)) keys.push(k);
+            }
+            keys.forEach((k) => localStorage.removeItem(k));
+        } catch (e) {
+            /* ignore */
+        }
     }
 }
 
@@ -384,20 +441,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showStatus('No .gpx files found in ' + (folder || '/'));
                 return;
             }
-            const cachedCount = files.filter((f) => cache.get(f.id, f.rev) !== null).length;
-            const toDownload = files.length - cachedCount;
-            showStatus(toDownload > 0 ? `Downloading 0/${toDownload}…` : 'Loading from cache…');
-            let downloaded = 0;
-            const items = await client.downloadAll(files, () => {
-                // Only count actual network downloads towards progress.
-                if (downloaded < toDownload) {
-                    downloaded++;
-                    showStatus(`Downloading ${downloaded}/${toDownload}…`);
-                }
+            showStatus(`Loading 0/${files.length}…`);
+            const items = await client.downloadAll(files, (d, t) => {
+                showStatus(`Loading ${d}/${t}…`);
             }, cache);
             window.mapVisualizer.clearTours();
             await window.mapVisualizer.loadGPXTexts(items);
             const ok = items.filter((i) => !i.error).length;
+            const cachedCount = items.filter((i) => i.cached).length;
             const cacheNote = cachedCount > 0 ? ` (${cachedCount} from cache)` : '';
             showStatus(`Loaded ${ok} tour(s) from Dropbox${cacheNote}.`);
         } catch (e) {
@@ -420,9 +471,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     if (clearCacheBtn) {
-        clearCacheBtn.addEventListener('click', () => {
-            const n = cache.clear();
-            showStatus(`Cleared ${n} cached file(s).`);
+        clearCacheBtn.addEventListener('click', async () => {
+            clearCacheBtn.disabled = true;
+            try {
+                const n = await cache.clear();
+                showStatus(`Cleared ${n} cached file(s).`);
+            } finally {
+                clearCacheBtn.disabled = false;
+            }
         });
     }
 
