@@ -389,7 +389,7 @@ class MapController(private val mapView: MapView) {
     }
 
     companion object {
-        private const val ROUTE_WIDTH = 5.0f
+        private const val ROUTE_WIDTH = 2.5f
         private const val FOLLOW_ZOOM = 16.0
         private const val FOLLOW_TILT_3D = 55.0
         private const val FREE_TILT_3D = 55.0
