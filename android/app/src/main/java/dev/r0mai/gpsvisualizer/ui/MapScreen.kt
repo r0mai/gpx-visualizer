@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -68,7 +67,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -95,7 +93,6 @@ import kotlin.math.roundToInt
 fun MapScreen(vm: MapViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val portrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
 
     val mapView = rememberMapViewWithLifecycle()
     val controller = remember(mapView) { MapController(mapView) }
@@ -210,26 +207,23 @@ fun MapScreen(vm: MapViewModel) {
                         modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                     ) { Icon(Icons.Filled.Menu, contentDescription = "Tours & sources") }
 
-                    // Ride HUD. Lower-left in portrait (clear of the map controls
-                    // and easy to glance at on a bike mount); top-center in landscape.
+                    // Ride HUD. Lower-left in both orientations (clear of the map
+                    // controls and easy to glance at on a bike mount).
                     if (following && rideStats != null) {
                         RideHud(
                             speedKmh = rideStats?.speedKmh,
                             altitude = rideStats?.altitude,
-                            modifier = if (portrait) {
-                                Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp)
-                            } else {
-                                Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
-                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 12.dp, bottom = 12.dp),
                         )
                     }
 
                     // Sync/import progress takes precedence; otherwise show the
-                    // transient status banner (results / errors).
-                    // Shift off-center only when the HUD occupies the top-center
-                    // (landscape follow); in portrait the HUD is in the lower-left.
+                    // transient status banner (results / errors). The HUD sits in
+                    // the lower-left, so the banner stays centered up top.
                     val bannerModifier = Modifier
-                        .align(if (following && !portrait) Alignment.TopStart else Alignment.TopCenter)
+                        .align(Alignment.TopCenter)
                         .padding(top = 64.dp, start = 12.dp, end = 12.dp)
                     val sp = syncProgress
                     if (sp != null) {
