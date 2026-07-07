@@ -28,6 +28,13 @@ class LocationTracker(context: Context) : LocationListener {
     private val _stats = MutableStateFlow<RideStats?>(null)
     val stats: StateFlow<RideStats?> = _stats
 
+    /**
+     * Fired on every GPS fix with the raw coordinates. Used to accumulate the
+     * live "recording" track; kept separate from [stats] (a de-duplicating
+     * StateFlow) so each fix is delivered as a distinct event.
+     */
+    var onLocation: ((lat: Double, lon: Double) -> Unit)? = null
+
     private var active = false
 
     @SuppressLint("MissingPermission")
@@ -52,6 +59,7 @@ class LocationTracker(context: Context) : LocationListener {
             altitude = if (location.hasAltitude()) location.altitude else null,
             bearing = if (location.hasBearing()) location.bearing else null,
         )
+        onLocation?.invoke(location.latitude, location.longitude)
     }
 
     @Deprecated("Required by older LocationListener")

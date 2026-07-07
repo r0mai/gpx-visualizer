@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.view.Gravity
 import dev.r0mai.gpsvisualizer.gpx.Bounds
+import dev.r0mai.gpsvisualizer.gpx.GeoPoint
 import dev.r0mai.gpsvisualizer.gpx.ROUTE_COLOR_HEX
 import dev.r0mai.gpsvisualizer.gpx.Tour
 import org.maplibre.android.camera.CameraPosition
@@ -60,6 +61,9 @@ class MapController(private val mapView: MapView) {
     private var locationEnabled = false
     private var hasLocationPermission = false
     private var tours: List<Tour> = emptyList()
+
+    // Live GPS "recording" track drawn as a blue line on top of the red routes.
+    private var recordTrack: List<GeoPoint> = emptyList()
 
     // Bookkeeping
     private val addedSourceIds = mutableSetOf<String>()
@@ -155,6 +159,16 @@ class MapController(private val mapView: MapView) {
         if (idsChanged) rebuildTourLayers() else applyVisibility()
     }
 
+    /**
+     * Replace the live-recording (blue) track. Called frequently (once per GPS
+     * fix while recording); updates the existing source in place rather than
+     * rebuilding layers. An empty/short list clears the line.
+     */
+    fun setRecordTrack(points: List<GeoPoint>) {
+        recordTrack = points
+        updateRecordTrack()
+    }
+
     fun setLocationPermission(granted: Boolean) {
         hasLocationPermission = granted
         if (granted && style != null && !locationActivated) {
@@ -233,6 +247,10 @@ class MapController(private val mapView: MapView) {
         addedSourceIds.forEach { s.getSource(it)?.let { src -> s.removeSource(src) } }
         addedLayerIds.clear()
         addedSourceIds.clear()
+        // The record layer/source aren't tracked in the sets above; drop them so
+        // they can be re-added last (on top of the freshly rebuilt tour layers).
+        s.getLayer(RECORD_LAYER)?.let { s.removeLayer(it) }
+        s.getSource(RECORD_SRC)?.let { s.removeSource(it) }
 
         // Keep tour overlays beneath the location puck so the position marker
         // always draws on top of the red route/waypoint markers. Once the
@@ -240,7 +258,7 @@ class MapController(private val mapView: MapView) {
         // tour layers below the bottom-most one (s.layers is bottom-to-top).
         // Before activation there is no anchor, so layers append on top.
         val locationAnchor = s.layers.firstOrNull { it.id in LOCATION_LAYER_IDS }?.id
-        val addTourLayer: (Layer) -> Unit = { layer ->
+        val addOverlay: (Layer) -> Unit = { layer ->
             if (locationAnchor != null) s.addLayerBelow(layer, locationAnchor) else s.addLayer(layer)
         }
 
@@ -262,7 +280,7 @@ class MapController(private val mapView: MapView) {
 
                 // Single solid red line, no casing/outline: a "coverage" mask.
                 val lineId = "$key-line"
-                addTourLayer(
+                addOverlay(
                     LineLayer(lineId, srcId).withProperties(
                         lineColor(ROUTE_COLOR_HEX),
                         lineWidth(ROUTE_WIDTH),
@@ -284,7 +302,7 @@ class MapController(private val mapView: MapView) {
                 addedSourceIds.add(wSrc)
 
                 val wLayer = "$key-wpt"
-                addTourLayer(
+                addOverlay(
                     CircleLayer(wLayer, wSrc).withProperties(
                         circleColor(ROUTE_COLOR_HEX),
                         circleRadius(4.5f),
@@ -296,6 +314,37 @@ class MapController(private val mapView: MapView) {
                 addedLayerIds.add(wLayer)
             }
         }
+
+        // Live-recording track last, so the blue line sits on top of every red
+        // route/waypoint (but still below the location puck via the anchor).
+        s.addSource(GeoJsonSource(RECORD_SRC, recordTrackFeatures()))
+        addOverlay(
+            LineLayer(RECORD_LAYER, RECORD_SRC).withProperties(
+                lineColor(RECORD_COLOR_HEX),
+                lineWidth(RECORD_WIDTH),
+                lineOpacity(1.0f),
+                lineCap(Property.LINE_CAP_ROUND),
+                lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+        )
+    }
+
+    private fun updateRecordTrack() {
+        val s = style ?: return
+        (s.getSource(RECORD_SRC) as? GeoJsonSource)?.setGeoJson(recordTrackFeatures())
+    }
+
+    /** A single blue polyline for the recorded track; empty until it has 2+ points. */
+    private fun recordTrackFeatures(): FeatureCollection {
+        val pts = recordTrack
+        if (pts.size < 2) return FeatureCollection.fromFeatures(emptyList<Feature>())
+        return FeatureCollection.fromFeatures(
+            listOf(
+                Feature.fromGeometry(
+                    LineString.fromLngLats(pts.map { Point.fromLngLat(it.lon, it.lat) }),
+                ),
+            ),
+        )
     }
 
     private fun applyVisibility() {
@@ -390,6 +439,13 @@ class MapController(private val mapView: MapView) {
 
     companion object {
         private const val ROUTE_WIDTH = 2.5f
+
+        // Live-recording overlay: a blue line following the phone's GPS.
+        private const val RECORD_SRC = "record-track-src"
+        private const val RECORD_LAYER = "record-track-line"
+        private const val RECORD_COLOR_HEX = "#1E88E5"
+        private const val RECORD_WIDTH = 4.0f
+
         private const val FOLLOW_ZOOM = 16.0
         private const val FOLLOW_TILT_3D = 55.0
         private const val FREE_TILT_3D = 55.0

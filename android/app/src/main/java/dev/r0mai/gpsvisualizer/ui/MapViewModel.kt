@@ -12,6 +12,7 @@ import dev.r0mai.gpsvisualizer.data.LoadedGpx
 import dev.r0mai.gpsvisualizer.data.LocationTracker
 import dev.r0mai.gpsvisualizer.data.RideStats
 import dev.r0mai.gpsvisualizer.data.SyncProgress
+import dev.r0mai.gpsvisualizer.gpx.GeoPoint
 import dev.r0mai.gpsvisualizer.gpx.GpxParser
 import dev.r0mai.gpsvisualizer.gpx.Tour
 import dev.r0mai.gpsvisualizer.gpx.TourPalette
@@ -53,6 +54,14 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _hasLocationPermission = MutableStateFlow(false)
     val hasLocationPermission: StateFlow<Boolean> = _hasLocationPermission.asStateFlow()
+
+    // Live GPS recording: accumulates the phone's fixes into a blue track drawn
+    // on top of the red routes. Independent of follow mode; Stop clears the line.
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    private val _recordTrack = MutableStateFlow<List<GeoPoint>>(emptyList())
+    val recordTrack: StateFlow<List<GeoPoint>> = _recordTrack.asStateFlow()
 
     private val _dropboxLinked = MutableStateFlow(dropbox.isLinked)
     val dropboxLinked: StateFlow<Boolean> = _dropboxLinked.asStateFlow()
@@ -102,18 +111,35 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         _isFollowing.value = false
     }
 
+    // ---- Recording ------------------------------------------------------------
+
+    // Start begins a fresh blue line; Stop erases it. Requires location
+    // permission (the UI requests it before calling start).
+    fun startRecording() {
+        if (!_hasLocationPermission.value) return
+        _recordTrack.value = emptyList()
+        _isRecording.value = true
+    }
+
+    fun stopRecording() {
+        _isRecording.value = false
+        _recordTrack.value = emptyList() // deletes the blue line
+    }
+
     fun setLocationPermission(granted: Boolean) {
         _hasLocationPermission.value = granted
         if (!granted) {
             _isFollowing.value = false
             _locationEnabled.value = false
+            _isRecording.value = false
+            _recordTrack.value = emptyList()
         }
     }
 
-    // React to follow changes for the HUD tracker.
+    // Run the GPS tracker whenever the map is following OR a recording is active.
     private fun updateTracker() {
-        if (_isFollowing.value && _hasLocationPermission.value) locationTracker.start()
-        else locationTracker.stop()
+        val active = (_isFollowing.value || _isRecording.value) && _hasLocationPermission.value
+        if (active) locationTracker.start() else locationTracker.stop()
     }
 
     // ---- Tour visibility ------------------------------------------------------
@@ -269,10 +295,15 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
-        // Keep the HUD tracker in sync with follow + permission state.
+        // Keep the GPS tracker in sync with follow + recording + permission state.
         viewModelScope.launch {
-            kotlinx.coroutines.flow.combine(_isFollowing, _hasLocationPermission) { _, _ -> }
-                .collect { updateTracker() }
+            kotlinx.coroutines.flow.combine(
+                _isFollowing, _isRecording, _hasLocationPermission,
+            ) { _, _, _ -> }.collect { updateTracker() }
+        }
+        // Append each fix to the recording track while recording is active.
+        locationTracker.onLocation = { lat, lon ->
+            if (_isRecording.value) _recordTrack.value = _recordTrack.value + GeoPoint(lat, lon)
         }
     }
 }

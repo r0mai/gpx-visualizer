@@ -29,12 +29,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -110,6 +112,8 @@ fun MapScreen(vm: MapViewModel) {
     val following by vm.isFollowing.collectAsStateWithLifecycle()
     val locationEnabled by vm.locationEnabled.collectAsStateWithLifecycle()
     val hasPerm by vm.hasLocationPermission.collectAsStateWithLifecycle()
+    val isRecording by vm.isRecording.collectAsStateWithLifecycle()
+    val recordTrack by vm.recordTrack.collectAsStateWithLifecycle()
     val fitEvent by vm.fitEvent.collectAsStateWithLifecycle()
     val isLoading by vm.isLoading.collectAsStateWithLifecycle()
     val status by vm.status.collectAsStateWithLifecycle()
@@ -122,6 +126,7 @@ fun MapScreen(vm: MapViewModel) {
     LaunchedEffect(following) { controller.setFollowing(following) }
     LaunchedEffect(locationEnabled) { controller.setLocationEnabled(locationEnabled) }
     LaunchedEffect(hasPerm) { controller.setLocationPermission(hasPerm) }
+    LaunchedEffect(recordTrack) { controller.setRecordTrack(recordTrack) }
     LaunchedEffect(fitEvent) { if (fitEvent > 0) controller.fitToVisibleTours() }
 
     // Push the top-right compass in past the transparent status bar / nav
@@ -139,12 +144,15 @@ fun MapScreen(vm: MapViewModel) {
     // Location permission.
     LaunchedEffect(Unit) { vm.setLocationPermission(hasLocationPermission(context)) }
     var pendingFollow by remember { mutableStateOf(false) }
+    var pendingRecord by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         vm.setLocationPermission(granted)
         if (granted && pendingFollow) vm.setFollowing(true)
+        if (granted && pendingRecord) vm.startRecording()
         pendingFollow = false
+        pendingRecord = false
     }
 
     // Local file import.
@@ -255,6 +263,30 @@ fun MapScreen(vm: MapViewModel) {
                         SmallFloatingActionButton(
                             onClick = openImport,
                         ) { Icon(Icons.Filled.FolderOpen, contentDescription = "Import GPX") }
+
+                        // Start/Stop recording the live blue GPS track. Start
+                        // begins a fresh line; Stop deletes it.
+                        FloatingActionButton(
+                            onClick = {
+                                when {
+                                    isRecording -> vm.stopRecording()
+                                    hasPerm -> vm.startRecording()
+                                    else -> {
+                                        pendingRecord = true
+                                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    }
+                                }
+                            },
+                            containerColor = if (isRecording) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.surface,
+                        ) {
+                            Icon(
+                                if (isRecording) Icons.Filled.Stop else Icons.Filled.FiberManualRecord,
+                                contentDescription = if (isRecording) "Stop recording" else "Start recording",
+                                tint = if (isRecording) MaterialTheme.colorScheme.onError
+                                else MaterialTheme.colorScheme.error,
+                            )
+                        }
 
                         FloatingActionButton(
                             onClick = {
