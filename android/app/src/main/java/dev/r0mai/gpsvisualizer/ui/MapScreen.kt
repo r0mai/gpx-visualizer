@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terrain
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -145,6 +146,7 @@ fun MapScreen(vm: MapViewModel) {
     LaunchedEffect(Unit) { vm.setLocationPermission(hasLocationPermission(context)) }
     var pendingFollow by remember { mutableStateOf(false) }
     var pendingRecord by remember { mutableStateOf(false) }
+    var showStopConfirm by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -269,7 +271,7 @@ fun MapScreen(vm: MapViewModel) {
                         FloatingActionButton(
                             onClick = {
                                 when {
-                                    isRecording -> vm.stopRecording()
+                                    isRecording -> showStopConfirm = true
                                     hasPerm -> vm.startRecording()
                                     else -> {
                                         pendingRecord = true
@@ -306,6 +308,25 @@ fun MapScreen(vm: MapViewModel) {
                             )
                         }
                     }
+                }
+
+                if (showStopConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showStopConfirm = false },
+                        title = { Text("Stop recording?") },
+                        text = { Text("This ends the current recording session and clears the recorded track.") },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showStopConfirm = false
+                                    vm.stopRecording()
+                                },
+                            ) { Text("Stop") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showStopConfirm = false }) { Text("Cancel") }
+                        },
+                    )
                 }
             }
         }
