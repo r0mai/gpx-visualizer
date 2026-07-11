@@ -410,14 +410,16 @@ class MapVisualizer {
         });
     }
 
-    // Highlight a specific tour and fade others
+    // Highlight a specific tour without fading the others
     highlightTour(activeFilename) {
         this.tourLayers.forEach((layerGroup, filename) => {
             const isActive = filename === activeFilename;
             const tour = this.tours.find(t => t.filename === filename);
             const baseColor = tour ? tour.color : this.colors[0];
-            const opacity = isActive ? 1.0 : 0.3;
-            const weight = isActive ? 4 : 2;
+            // Non-active routes keep their normal appearance; only the active
+            // route stands out (highlight color + thicker) and is drawn on top.
+            const opacity = isActive ? 1.0 : 0.8;
+            const weight = isActive ? 4 : 3;
 
             layerGroup.eachLayer(layer => {
                 if (layer.setStyle && typeof layer.setStyle === 'function') {
