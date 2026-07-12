@@ -72,6 +72,8 @@ class StatsDashboard {
         this.renderCumulativeDistance(grid, rides);
         this.renderSpeedTrend(grid, rides);
         this.renderDistanceHistogram(grid, rides);
+        this.renderMaxDistanceHistogram(grid, rides);
+        this.renderMaxDistanceRecord(grid, rides);
         this.renderDistanceVsClimb(grid, rides);
         this.renderDayOfWeek(grid, rides);
         this.renderStartHour(grid, rides);
@@ -137,6 +139,10 @@ class StatsDashboard {
             : null;
         const maxSpeed = rides.reduce((s, r) => Math.max(s, r.maxSpeed || 0), 0);
         const streak = this.longestStreak(rides);
+        const distCandidates = rides.filter(r => r.maxDistanceFromStart !== null);
+        const furthest = distCandidates.length > 0
+            ? distCandidates.reduce((a, b) => (b.maxDistanceFromStart > a.maxDistanceFromStart ? b : a))
+            : null;
 
         const cards = [
             { label: 'Rides', value: `${rides.length}` },
@@ -159,6 +165,11 @@ class StatsDashboard {
                 detail: this.formatDateShort(fastest.time.start)
             } : null,
             maxSpeed > 0 ? { label: 'Top Speed', value: `${maxSpeed.toFixed(1)} km/h` } : null,
+            furthest ? {
+                label: 'Furthest from Start',
+                value: `${furthest.maxDistanceFromStart.toFixed(1)} km`,
+                detail: this.formatDateShort(furthest.time.start)
+            } : null,
             { label: 'Longest Streak', value: `${streak} day${streak === 1 ? '' : 's'}` },
             { label: 'Avg Ride', value: `${(totalDistance / rides.length).toFixed(1)} km` }
         ].filter(Boolean);
@@ -409,25 +420,27 @@ class StatsDashboard {
         });
     }
 
-    renderDistanceHistogram(grid, rides) {
-        const max = Math.max(...rides.map(r => r.distance));
-        // Pick a bin width (1/2/5/10/20 km...) that gives roughly 10 bins.
-        const niceWidths = [1, 2, 5, 10, 20, 50, 100];
+    // Generic bucketed distribution chart over one value per ride.
+    renderHistogram(grid, title, values, color) {
+        if (values.length === 0) return;
+        const max = Math.max(...values);
+        // Pick a bin width (0.5/1/2/5/10 km...) that gives roughly 10 bins.
+        const niceWidths = [0.5, 1, 2, 5, 10, 20, 50, 100];
         const binWidth = niceWidths.find(w => max / w <= 12) || 100;
         const binCount = Math.floor(max / binWidth) + 1;
         const bins = new Array(binCount).fill(0);
-        rides.forEach(r => {
-            bins[Math.floor(r.distance / binWidth)]++;
+        values.forEach(v => {
+            bins[Math.floor(v / binWidth)]++;
         });
 
-        this.addChart(this.createChartCard(grid, 'Ride Distance Distribution'), {
+        this.addChart(this.createChartCard(grid, title), {
             type: 'bar',
             data: {
                 labels: bins.map((_, i) => `${i * binWidth}–${(i + 1) * binWidth}`),
                 datasets: [{
                     label: 'rides',
                     data: bins,
-                    backgroundColor: '#9b59b6'
+                    backgroundColor: color
                 }]
             },
             options: {
@@ -439,6 +452,69 @@ class StatsDashboard {
                         beginAtZero: true,
                         ticks: { precision: 0 }
                     }
+                }
+            }
+        });
+    }
+
+    renderDistanceHistogram(grid, rides) {
+        this.renderHistogram(grid, 'Ride Distance Distribution',
+            rides.map(r => r.distance), '#9b59b6');
+    }
+
+    renderMaxDistanceHistogram(grid, rides) {
+        this.renderHistogram(grid, 'Max Distance from Start (Distribution)',
+            rides.filter(r => r.maxDistanceFromStart !== null).map(r => r.maxDistanceFromStart),
+            '#2980b9');
+    }
+
+    // Running record of the furthest straight-line distance from the ride's
+    // starting point — monotonically increasing over time.
+    renderMaxDistanceRecord(grid, rides) {
+        const withDist = rides.filter(r => r.maxDistanceFromStart !== null);
+        if (withDist.length === 0) return;
+
+        let record = 0;
+        const data = withDist.map(r => {
+            const newRecord = r.maxDistanceFromStart > record;
+            record = Math.max(record, r.maxDistanceFromStart);
+            return { x: r.time.start.getTime(), y: record, ride: r, newRecord: newRecord };
+        });
+
+        this.addChart(this.createChartCard(grid, 'Max Distance from Start (Record over Time)'), {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'km',
+                    data: data,
+                    borderColor: '#2980b9',
+                    backgroundColor: 'rgba(41, 128, 185, 0.15)',
+                    fill: true,
+                    stepped: true,
+                    // Only mark the rides that set a new record.
+                    pointRadius: (ctx) => ctx.raw.newRecord ? 4 : 0,
+                    pointHoverRadius: (ctx) => ctx.raw.newRecord ? 6 : 0,
+                    pointBackgroundColor: '#5dade2'
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => this.formatDateShort(new Date(items[0].parsed.x)),
+                            label: (item) => {
+                                const ride = item.raw.ride;
+                                return item.raw.newRecord
+                                    ? `New record: ${ride.maxDistanceFromStart.toFixed(1)} km (${ride.name})`
+                                    : `Record: ${item.parsed.y.toFixed(1)} km`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: this.timeAxisOptions(),
+                    y: { title: { display: true, text: 'km from start' }, beginAtZero: true }
                 }
             }
         });

@@ -42,7 +42,8 @@ class GPXParser {
                     moving: null
                 },
                 avgSpeed: null,
-                maxSpeed: null
+                maxSpeed: null,
+                maxDistanceFromStart: null
             };
 
             // Parse tracks
@@ -192,13 +193,26 @@ class GPXParser {
         let maxElevation = -Infinity;
         let startTime = null;
         let endTime = null;
+        let startPoint = null;
+        let maxDistanceFromStart = 0;
 
         // Collect all points from tracks
         tour.tracks.forEach(track => {
             track.segments.forEach(segment => {
                 segment.points.forEach((point, index) => {
                     allPoints.push(point);
-                    
+
+                    // Straight-line distance from the very first track point
+                    if (startPoint === null) {
+                        startPoint = point;
+                    } else {
+                        const fromStart = this.calculateDistance(
+                            startPoint.lat, startPoint.lon,
+                            point.lat, point.lon
+                        );
+                        maxDistanceFromStart = Math.max(maxDistanceFromStart, fromStart);
+                    }
+
                     // Calculate distance between consecutive points
                     if (index > 0) {
                         const prevPoint = segment.points[index - 1];
@@ -274,6 +288,7 @@ class GPXParser {
         tour.time.start = startTime;
         tour.time.end = endTime;
         tour.time.duration = startTime && endTime ? endTime - startTime : null;
+        tour.maxDistanceFromStart = startPoint !== null ? maxDistanceFromStart : null;
 
         this.calculateSpeedStats(tour);
     }
