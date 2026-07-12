@@ -504,7 +504,19 @@ class MapVisualizer {
         if (tour.time.duration) {
             content += `<div><strong>Duration:</strong> ${this.parser.formatDuration(tour.time.duration)}</div>`;
         }
-        
+
+        if (tour.time.moving) {
+            content += `<div><strong>Moving Time:</strong> ${this.parser.formatDuration(tour.time.moving)}</div>`;
+        }
+
+        if (tour.avgSpeed) {
+            content += `<div><strong>Avg Speed (moving):</strong> ${tour.avgSpeed.toFixed(1)} km/h</div>`;
+        }
+
+        if (tour.maxSpeed) {
+            content += `<div><strong>Max Speed:</strong> ${tour.maxSpeed.toFixed(1)} km/h</div>`;
+        }
+
         content += `</div></div>`;
         return content;
     }
@@ -524,6 +536,7 @@ class MapVisualizer {
                     ${this.parser.formatDistance(tour.distance)}
                     ${tour.time.duration ? '• ' + this.parser.formatDuration(tour.time.duration) : ''}
                     ${tour.elevation.gain > 0 ? '• ↗' + tour.elevation.gain.toFixed(0) + 'm' : ''}
+                    ${tour.avgSpeed ? '• ⌀' + tour.avgSpeed.toFixed(1) + ' km/h' : ''}
                 </div>
             </div>
         `;
@@ -609,18 +622,31 @@ class MapVisualizer {
         document.getElementById('stats-container').style.display = 'block';
     }
 
+    // Tours that are currently shown on the map: checkbox checked and not
+    // hidden by the tour count slider.
+    getVisibleTours() {
+        return this.tours.filter(tour => {
+            const checkbox = document.querySelector(`input[data-filename="${tour.filename}"]`);
+            if (!checkbox || !checkbox.checked) return false;
+            const item = checkbox.closest('.tour-item');
+            return !item || item.style.display !== 'none';
+        });
+    }
+
     // Update statistics display
     updateStatistics() {
-        const visibleTours = this.tours.filter(tour => {
-            const checkbox = document.querySelector(`input[data-filename="${tour.filename}"]`);
-            return checkbox && checkbox.checked;
-        });
-        
+        const visibleTours = this.getVisibleTours();
+
         const totalDistance = visibleTours.reduce((sum, tour) => sum + tour.distance, 0);
-        
+
         document.getElementById('total-tours').textContent = this.tours.length;
         document.getElementById('total-distance').textContent = this.parser.formatDistance(totalDistance);
         document.getElementById('active-tours').textContent = visibleTours.length;
+
+        // Keep the statistics dashboard in sync with the visible tours.
+        if (window.statsDashboard) {
+            window.statsDashboard.setTours(visibleTours);
+        }
     }
 
     // Show error message

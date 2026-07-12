@@ -38,8 +38,11 @@ class GPXParser {
                 time: {
                     start: null,
                     end: null,
-                    duration: null
-                }
+                    duration: null,
+                    moving: null
+                },
+                avgSpeed: null,
+                maxSpeed: null
             };
 
             // Parse tracks
@@ -271,6 +274,60 @@ class GPXParser {
         tour.time.start = startTime;
         tour.time.end = endTime;
         tour.time.duration = startTime && endTime ? endTime - startTime : null;
+
+        this.calculateSpeedStats(tour);
+    }
+
+    // Calculate moving time, average moving speed and a smoothed max speed.
+    // Uses per-segment timestamps; segments without time data are skipped.
+    calculateSpeedStats(tour) {
+        const MAX_GAP_MS = 30000;      // time gaps above this count as a pause
+        const MOVING_SPEED_KMH = 2;    // below this the rider is considered stopped
+        const WINDOW_MS = 10000;       // max speed is averaged over this window to filter GPS noise
+        const MAX_PLAUSIBLE_KMH = 120; // discard GPS jumps
+
+        let movingTime = 0;
+        let maxSpeed = 0;
+
+        tour.tracks.forEach(track => {
+            track.segments.forEach(segment => {
+                const pts = segment.points.filter(p => p.time);
+                if (pts.length < 2) return;
+
+                const cumDist = [0];
+                for (let i = 1; i < pts.length; i++) {
+                    cumDist.push(cumDist[i - 1] + this.calculateDistance(
+                        pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon
+                    ));
+                }
+
+                for (let i = 1; i < pts.length; i++) {
+                    const dt = pts[i].time - pts[i - 1].time;
+                    if (dt <= 0 || dt > MAX_GAP_MS) continue;
+                    const speed = (cumDist[i] - cumDist[i - 1]) / (dt / 3600000);
+                    if (speed >= MOVING_SPEED_KMH) {
+                        movingTime += dt;
+                    }
+                }
+
+                let i = 0;
+                for (let j = 1; j < pts.length; j++) {
+                    while (j - i > 1 && pts[j].time - pts[i + 1].time >= WINDOW_MS) {
+                        i++;
+                    }
+                    const dt = pts[j].time - pts[i].time;
+                    if (dt < WINDOW_MS) continue;
+                    const speed = (cumDist[j] - cumDist[i]) / (dt / 3600000);
+                    if (speed > maxSpeed && speed <= MAX_PLAUSIBLE_KMH) {
+                        maxSpeed = speed;
+                    }
+                }
+            });
+        });
+
+        tour.time.moving = movingTime > 0 ? movingTime : null;
+        tour.avgSpeed = movingTime > 0 ? tour.distance / (movingTime / 3600000) : null;
+        tour.maxSpeed = maxSpeed > 0 ? maxSpeed : null;
     }
 
     // Calculate distance between two points using Haversine formula
