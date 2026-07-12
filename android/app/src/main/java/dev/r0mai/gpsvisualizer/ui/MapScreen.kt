@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -118,6 +119,7 @@ fun MapScreen(vm: MapViewModel) {
     val status by vm.status.collectAsStateWithLifecycle()
     val syncProgress by vm.syncProgress.collectAsStateWithLifecycle()
     val rideStats by vm.rideStats.collectAsStateWithLifecycle()
+    val sessionStartMs by vm.sessionStartMs.collectAsStateWithLifecycle()
 
     LaunchedEffect(tours) { controller.setTours(tours) }
     LaunchedEffect(styleId) { controller.setStyle(styleId) }
@@ -221,6 +223,7 @@ fun MapScreen(vm: MapViewModel) {
                         RideHud(
                             speedKmh = rideStats?.speedKmh,
                             altitude = rideStats?.altitude,
+                            sessionStartMs = sessionStartMs,
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .padding(start = 12.dp, bottom = 12.dp),
@@ -404,22 +407,60 @@ private fun StatusBanner(text: String, loading: Boolean, modifier: Modifier = Mo
 }
 
 @Composable
-private fun RideHud(speedKmh: Double?, altitude: Double?, modifier: Modifier = Modifier) {
+private fun RideHud(
+    speedKmh: Double?,
+    altitude: Double?,
+    sessionStartMs: Long?,
+    modifier: Modifier = Modifier,
+) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
         tonalElevation = 3.dp,
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HudStat(value = speedKmh?.let { "%.1f".format(it) } ?: "–", unit = "km/h")
-            HudStat(value = altitude?.let { it.roundToInt().toString() } ?: "–", unit = "m")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HudStat(value = speedKmh?.let { "%.1f".format(it) } ?: "–", unit = "km/h")
+                HudStat(value = altitude?.let { it.roundToInt().toString() } ?: "–", unit = "m")
+            }
+            if (sessionStartMs != null) {
+                Spacer(Modifier.height(6.dp))
+                SessionTimer(startMs = sessionStartMs)
+            }
         }
     }
+}
+
+/** Live elapsed time since [startMs] (an elapsedRealtime timestamp), ticking every second. */
+@Composable
+private fun SessionTimer(startMs: Long) {
+    var elapsedMs by remember(startMs) { mutableStateOf(SystemClock.elapsedRealtime() - startMs) }
+    LaunchedEffect(startMs) {
+        while (true) {
+            elapsedMs = SystemClock.elapsedRealtime() - startMs
+            delay(1000)
+        }
+    }
+    Text(
+        formatElapsed(elapsedMs),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+}
+
+private fun formatElapsed(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
 @Composable

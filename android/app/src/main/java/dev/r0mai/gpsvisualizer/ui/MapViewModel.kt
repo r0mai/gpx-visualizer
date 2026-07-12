@@ -3,6 +3,7 @@ package dev.r0mai.gpsvisualizer.ui
 import android.app.Activity
 import android.app.Application
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.r0mai.gpsvisualizer.data.DropboxRepository
@@ -83,6 +84,14 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     val fitEvent: StateFlow<Int> = _fitEvent.asStateFlow()
 
     val rideStats: StateFlow<RideStats?> = locationTracker.stats
+
+    // Start of the current tracking session as an elapsedRealtime() timestamp,
+    // set when location tracking turns on and cleared when it turns off. Drives
+    // the ride HUD's session timer. Uses elapsedRealtime so it is immune to
+    // wall-clock changes and keeps counting across a pan / re-follow (which
+    // detach the camera but keep the session alive).
+    private val _sessionStartMs = MutableStateFlow<Long?>(null)
+    val sessionStartMs: StateFlow<Long?> = _sessionStartMs.asStateFlow()
 
     // ---- Map controls ---------------------------------------------------------
 
@@ -300,6 +309,14 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             kotlinx.coroutines.flow.combine(
                 _isFollowing, _isRecording, _hasLocationPermission,
             ) { _, _, _ -> }.collect { updateTracker() }
+        }
+        // Stamp the session start when location tracking turns on; clear it when
+        // it turns off. locationEnabled stays true across a pan / re-follow, so
+        // the HUD timer counts the whole session rather than resetting.
+        viewModelScope.launch {
+            _locationEnabled.collect { enabled ->
+                _sessionStartMs.value = if (enabled) SystemClock.elapsedRealtime() else null
+            }
         }
         // Append each fix to the recording track while recording is active.
         locationTracker.onLocation = { lat, lon ->
