@@ -31,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FitScreen
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
@@ -261,10 +260,6 @@ fun MapScreen(vm: MapViewModel) {
                         SmallFloatingActionButton(
                             onClick = { controller.fitToVisibleTours() },
                         ) { Icon(Icons.Filled.FitScreen, contentDescription = "Fit all tours") }
-
-                        SmallFloatingActionButton(
-                            onClick = openImport,
-                        ) { Icon(Icons.Filled.FolderOpen, contentDescription = "Import GPX") }
 
                         // Start/Stop recording the live blue GPS track. Start
                         // begins a fresh line; Stop deletes it.
