@@ -2,6 +2,7 @@ name: Build Android APK
 
 on:
   push:
+    branches: [master]
   workflow_dispatch:
 
 # Needed so the workflow can create releases / tags with GITHUB_TOKEN.
