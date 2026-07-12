@@ -256,7 +256,8 @@
             display: none;
             position: fixed;
             inset: 0;
-            background-color: #f5f7fa;
+            background-color: #1b1e23;
+            color: #e8eaed;
             z-index: 2000;
             overflow-y: auto;
         }
@@ -266,7 +267,8 @@
             justify-content: space-between;
             align-items: center;
             padding: 1rem 1.5rem;
-            background-color: #2c3e50;
+            background-color: #14161a;
+            border-bottom: 1px solid #2e343c;
             color: white;
             position: sticky;
             top: 0;
@@ -280,7 +282,7 @@
 
         .dashboard-close {
             border: none;
-            background-color: #34495e;
+            background-color: #2e343c;
             color: white;
             padding: 0.5rem 1rem;
             border-radius: 5px;
@@ -288,7 +290,7 @@
         }
 
         .dashboard-close:hover {
-            background-color: #3d566e;
+            background-color: #3a424c;
         }
 
         .dashboard-content {
@@ -299,7 +301,7 @@
 
         .dashboard-empty {
             text-align: center;
-            color: #7f8c8d;
+            color: #9aa3ab;
             padding: 3rem;
         }
 
@@ -311,28 +313,28 @@
         }
 
         .summary-card {
-            background-color: white;
+            background-color: #262b32;
+            border: 1px solid #2e343c;
             border-radius: 8px;
             padding: 1rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
             text-align: center;
         }
 
         .summary-value {
             font-size: 1.4rem;
             font-weight: bold;
-            color: #2c3e50;
+            color: #ffffff;
         }
 
         .summary-label {
             font-size: 0.8rem;
-            color: #7f8c8d;
+            color: #9aa3ab;
             margin-top: 0.25rem;
         }
 
         .summary-detail {
             font-size: 0.75rem;
-            color: #95a5a6;
+            color: #7d868e;
             margin-top: 0.15rem;
         }
 
@@ -343,15 +345,15 @@
         }
 
         .chart-card {
-            background-color: white;
+            background-color: #262b32;
+            border: 1px solid #2e343c;
             border-radius: 8px;
             padding: 1rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
         }
 
         .chart-card h4 {
             margin: 0 0 0.75rem 0;
-            color: #2c3e50;
+            color: #e8eaed;
         }
 
         .chart-wrapper {
@@ -378,7 +380,7 @@
             width: 14px;
             flex-shrink: 0;
             font-size: 0.7rem;
-            color: #7f8c8d;
+            color: #9aa3ab;
             overflow: visible;
             white-space: nowrap;
         }
@@ -398,14 +400,14 @@
             width: 14px;
             height: 14px;
             border-radius: 3px;
-            background-color: #e8ecef;
+            background-color: #313841;
             flex-shrink: 0;
         }
 
-        .heatmap-cell[data-level="1"] { background-color: #fbc4bc; }
-        .heatmap-cell[data-level="2"] { background-color: #f1948a; }
-        .heatmap-cell[data-level="3"] { background-color: #e74c3c; }
-        .heatmap-cell[data-level="4"] { background-color: #a93226; }
+        .heatmap-cell[data-level="1"] { background-color: #57231d; }
+        .heatmap-cell[data-level="2"] { background-color: #8b2e22; }
+        .heatmap-cell[data-level="3"] { background-color: #c0392b; }
+        .heatmap-cell[data-level="4"] { background-color: #ff6f59; }
 
         .heatmap-legend {
             display: flex;
@@ -413,7 +415,7 @@
             gap: 3px;
             margin-top: 0.5rem;
             font-size: 0.75rem;
-            color: #7f8c8d;
+            color: #9aa3ab;
         }
     </style>
 </head>
@@ -448,7 +450,12 @@
             </div>
             
             <div id="error-container"></div>
-            
+
+            <button id="open-stats-dashboard" class="dropbox-btn"
+                    style="display: none; margin-bottom: 1rem;">
+                📈 Open Dashboard
+            </button>
+
             <div class="tour-filter-container" id="tour-filter-container" style="display: none;">
                 <div class="filter-header">
                     <label for="tour-count-slider">Show Tours:</label>
@@ -487,9 +494,6 @@
                     <span>Active Tours:</span>
                     <span id="active-tours">0</span>
                 </div>
-                <button id="open-stats-dashboard" class="dropbox-btn" style="margin-top: 0.5rem;">
-                    📈 Open Dashboard
-                </button>
             </div>
         </div>
         

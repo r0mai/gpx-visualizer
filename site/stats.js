@@ -44,6 +44,10 @@ class StatsDashboard {
     }
 
     render() {
+        // Dark theme for all charts.
+        Chart.defaults.color = '#c7ccd1';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.08)';
+
         this.destroyCharts();
         this.content.innerHTML = '';
 
@@ -97,7 +101,7 @@ class StatsDashboard {
     }
 
     formatDateShort(date) {
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     }
 
     longestStreak(rides) {
@@ -204,12 +208,18 @@ class StatsDashboard {
 
         const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         let prevMonth = -1;
+        let prevYear = -1;
         for (let week = new Date(first); week <= last; week.setDate(week.getDate() + 7)) {
             const monthLabel = document.createElement('div');
             monthLabel.className = 'heatmap-month-label';
             if (week.getMonth() !== prevMonth) {
-                monthLabel.textContent = week.toLocaleDateString(undefined, { month: 'short' });
+                // Mark the year on the first label and whenever it changes.
+                const options = week.getFullYear() !== prevYear
+                    ? { month: 'short', year: 'numeric' }
+                    : { month: 'short' };
+                monthLabel.textContent = week.toLocaleDateString(undefined, options);
                 prevMonth = week.getMonth();
+                prevYear = week.getFullYear();
             }
             monthRow.appendChild(monthLabel);
 

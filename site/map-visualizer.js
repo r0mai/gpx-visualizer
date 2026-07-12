@@ -620,6 +620,7 @@ class MapVisualizer {
     updateUI() {
         this.updateStatistics();
         document.getElementById('stats-container').style.display = 'block';
+        document.getElementById('open-stats-dashboard').style.display = 'block';
     }
 
     // Tours that are currently shown on the map: checkbox checked and not
